@@ -48,8 +48,22 @@ jobs:
           restore-keys: ${{ runner.os }}-gradle
 
       - name: Install XcodeGen (project.yml -> xcodeproj)
+        # macos-14 runner 的 brew 有 tap trust 检查（aws/tap 不受信任会导致 brew install 中断）。
+        # 双保险：先 brew（带 HOMEBREW_NO_REQUIRE_TAP_TRUST 兜底），失败则从 GitHub Release 直接下二进制
         run: |
-          brew install xcodegen
+          export HOMEBREW_NO_REQUIRE_TAP_TRUST=1
+          if brew list xcodegen &>/dev/null; then
+            echo "xcodegen already installed"
+          elif brew install xcodegen 2>&1 | tail -3; then
+            echo "xcodegen installed via brew"
+          else
+            echo "brew install failed, downloading binary from GitHub Releases..."
+            curl -sL -o /tmp/xcodegen.zip \
+              https://github.com/yonaskolb/XcodeGen/releases/download/2.42.0/xcodegen.zip
+            unzip -o /tmp/xcodegen.zip -d /tmp/xcodegen-bin
+            mv /tmp/xcodegen-bin/usr/local/bin/xcodegen /usr/local/bin/xcodegen
+            chmod +x /usr/local/bin/xcodegen
+          fi
           xcodegen --version
 
       - name: Generate iOS project (xcodegen)
