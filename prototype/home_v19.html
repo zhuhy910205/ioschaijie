@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>柴杰相册 - 原型</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --bg:#E9E5DE; --card:#F5F2EC; --text-primary:#46413B; --text-secondary:#968D83;
+    --accent:#A88F79; --accent-light:#EAE1D8; --red:#B07D6B;
+    --border:#E0DAD1; --radius:10px;
+  }
+  body { font-family:-apple-system,'PingFang SC','Helvetica Neue',sans-serif; background:linear-gradient(160deg,#EFEAE2 0%,#E3DDD3 100%); color:var(--text-primary); max-width:480px; margin:0 auto; min-height:100vh; position:relative; }
+  body::before { content:''; position:fixed; inset:0; z-index:-1; background:
+    radial-gradient(circle at 18% 14%, rgba(168,143,121,.20), transparent 42%),
+    radial-gradient(circle at 86% 10%, rgba(176,125,107,.16), transparent 44%),
+    radial-gradient(circle at 72% 90%, rgba(201,154,142,.20), transparent 46%); }
+
+  /* ===== Avatar Filter Row (top) ===== */
+  .avatar-row { display:flex; align-items:center; gap:11px; padding:18px 6px 14px; overflow-x:auto; scrollbar-width:none; }
+  .avatar-row::-webkit-scrollbar { display:none; }
+  .avatar-item { flex-shrink:0; cursor:pointer; transition:transform .15s; }
+  .avatar-item:active { transform:scale(.93); }
+  .avatar-wrap { position:relative; }
+  .avatar { width:56px; height:56px; border-radius:50%; object-fit:cover; border:2.5px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,.08); transition:all .2s; display:block; }
+  .avatar-item.selected .avatar { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-light),0 3px 10px rgba(74,144,217,.22); transform:scale(1.06); }
+  .badge { position:absolute; top:-3px; right:-3px; background:linear-gradient(135deg,#C99A8E,#A88F79); color:#fff; font-size:10px; font-weight:700; min-width:21px; height:21px; border-radius:11px; display:flex; align-items:center; justify-content:center; padding:0 5px; box-shadow:0 2px 5px rgba(176,125,107,.3); }
+  .more-avatars { width:56px; height:56px; border-radius:50%; background:#E2DBD1; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; border:2px dashed #C3B7A8; font-size:14px; font-weight:700; color:var(--text-secondary); transition:transform .15s; }
+  .more-avatars.active { border-style:solid; border-color:var(--accent); color:var(--accent); background:var(--accent-light); }
+  .more-avatars:active { transform:scale(.92); }
+
+  .filter-hint { display:none; margin:0 14px 4px; padding:8px 14px; background:rgba(234,225,216,.6); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,.4); border-radius:10px; font-size:13px; color:var(--accent); font-weight:500; text-align:center; animation:fadeIn .2s; }
+  .filter-hint.show { display:block; }
+  @keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
+
+  /* ===== Search Bar (显示全部 + 输入框 + 搜索按钮) ===== */
+  .search-bar { display:flex; align-items:center; gap:10px; padding:6px 14px 12px; }
+  .sb-pill { display:flex; align-items:center; gap:5px; padding:9px 16px; border-radius:21px; font-size:14px; font-weight:600; cursor:pointer; white-space:nowrap; background:var(--accent); color:#fff; border:none; box-shadow:0 2px 8px rgba(74,144,217,.28); transition:transform .15s; flex-shrink:0; }
+  .sb-pill:active { transform:scale(.95); }
+  .sb-pill svg { width:15px; height:15px; stroke:#fff; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .sb-input-wrap { flex:1; margin-left:34px; display:flex; align-items:center; background:rgba(255,255,255,.4); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border-radius:21px; padding:10px 15px; border:1px solid rgba(255,255,255,.45); transition:border-color .15s; }
+  .sb-input-wrap:focus-within { border-color:var(--accent); background:rgba(255,255,255,.6); }
+  .sb-input { flex:1; border:none; background:transparent; outline:none; font-size:14px; color:var(--text-primary); min-width:0; }
+  .sb-input::placeholder { color:#B0A698; }
+  .sb-btn { width:42px; height:42px; border-radius:50%; background:var(--accent); border:none; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(74,144,217,.3); transition:opacity .15s; }
+  .sb-btn:active { opacity:.8; }
+  .sb-btn svg { width:20px; height:20px; stroke:#fff; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+
+  /* ===== Waterfall Masonry Grid ===== */
+  .waterfall { column-count:2; column-gap:9px; padding:0 11px 100px; }
+  .xcard { break-inside:avoid; margin-bottom:9px; background:rgba(245,242,236,.55); backdrop-filter:blur(12px) saturate(1.1); -webkit-backdrop-filter:blur(12px) saturate(1.1); border:1px solid rgba(255,255,255,.45); border-radius:var(--radius); overflow:hidden; box-shadow:0 4px 16px rgba(70,65,59,.10); cursor:pointer; transition:transform .15s; }
+  .xcard:active { transform:scale(.97); }
+  .xcard-img { width:100%; display:block; background:#EDEDED; }
+  .xcard-body { padding:8px 9px 9px; }
+  .xcard-title { font-size:13.5px; font-weight:600; line-height:1.35; color:var(--text-primary); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .xcard-actions { display:flex; gap:7px; margin-top:8px; }
+  .xbtn { flex:1; text-align:center; padding:6px 0; border-radius:7px; font-size:12px; font-weight:500; cursor:pointer; border:1px solid rgba(255,255,255,.5); background:rgba(255,255,255,.4); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); color:var(--accent); display:flex; align-items:center; justify-content:center; gap:4px; transition:all .15s; }
+  .xbtn:active { background:rgba(168,143,121,.18); }
+  .xbtn svg { width:13px; height:13px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+
+  /* ===== Bottom Nav (3 items) ===== */
+  .bottom-nav { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:480px; background:rgba(245,242,236,.7); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border-top:1px solid rgba(255,255,255,.5); display:flex; justify-content:space-around; padding:10px 0 22px; z-index:100; }
+  .nav-item { display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; color:var(--text-secondary); font-size:10px; transition:color .15s; min-width:64px; }
+  .nav-item.active { color:var(--text-primary); }
+  .nav-item svg { width:23px; height:23px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .nav-item.active svg { stroke:var(--red); }
+
+  /* ===== Center Post "+" (小红书风格，凸起) ===== */
+  .nav-plus { display:flex; align-items:center; justify-content:center; width:48px; height:48px; border-radius:15px; background:linear-gradient(135deg,#C99A8E,#B07D6B); box-shadow:0 6px 16px rgba(176,125,107,.42); transform:translateY(-4px); cursor:pointer; flex-shrink:0; transition:transform .15s; }
+  .nav-plus:active { transform:translateY(-4px) scale(.9); }
+  .nav-plus svg { width:26px; height:26px; stroke:#fff; fill:none; stroke-width:2.4; stroke-linecap:round; }
+
+  /* ===== Toast ===== */
+  .toast { position:fixed; left:50%; bottom:92px; transform:translateX(-50%) translateY(10px); background:rgba(70,65,59,.92); color:#fff; padding:10px 18px; border-radius:20px; font-size:13px; opacity:0; pointer-events:none; transition:all .25s; z-index:400; }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* ===== More Faces Inline (头像行下方就地展开，横滑) ===== */
+  .more-inline { display:none; margin:2px 14px 10px; background:rgba(234,225,216,.6); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,.4); border-radius:14px; padding:9px 12px 11px; animation:fadeIn .2s; }
+  .more-inline.show { display:block; }
+  .more-inline-scroll { display:flex; gap:13px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; }
+  .more-inline-scroll::-webkit-scrollbar { display:none; }
+  .more-inline-face { flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:5px; cursor:pointer; width:58px; }
+  .more-inline-face .avatar-wrap { position:relative; }
+  .more-inline-face .avatar { width:54px; height:54px; border-radius:50%; object-fit:cover; border:2.5px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,.08); transition:all .2s; }
+  .more-inline-face.selected .avatar { border-color:var(--accent); box-shadow:0 0 0 3px #fff,0 2px 10px rgba(168,143,121,.4); transform:scale(1.06); }
+  .more-inline-face .fname { font-size:11px; color:var(--text-secondary); max-width:58px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .more-inline-face.selected .fname { color:var(--accent); font-weight:600; }
+
+  /* ===== Analyze Modal ===== */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:210; align-items:flex-end; justify-content:center; }
+  .modal-overlay.show { display:flex; }
+  .modal-sheet { background:rgba(245,242,236,.72); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,.5); border-radius:20px 20px 0 0; width:100%; max-width:480px; max-height:85vh; overflow-y:auto; padding:24px 20px 34px; animation:slideUp .25s ease-out; }
+  .modal-handle { width:36px; height:4px; background:#DDD; border-radius:2px; margin:0 auto 18px; }
+  .modal-title { font-size:18px; font-weight:700; margin-bottom:16px; }
+  .modal-img { width:100%; border-radius:12px; margin-bottom:16px; }
+  .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .info-card { background:rgba(245,242,236,.5); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,.4); border-radius:10px; padding:12px; }
+  .info-label { font-size:11px; color:var(--text-secondary); margin-bottom:4px; }
+  .info-value { font-size:14px; font-weight:600; color:var(--text-primary); }
+  .analysis-text { font-size:13.5px; line-height:1.75; color:var(--text-primary); white-space:pre-wrap; background:rgba(245,242,236,.5); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,.4); border-radius:10px; padding:14px; max-height:52vh; overflow-y:auto; }
+  .close-btn { width:100%; padding:12px; margin-top:16px; background:rgba(168,143,121,.92); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); color:#fff; border:1px solid rgba(255,255,255,.3); border-radius:12px; font-size:15px; font-weight:600; cursor:pointer; transition:opacity .15s; }
+  .close-btn:active { opacity:.85; }
+
+  .fullscreen-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:300; align-items:center; justify-content:center; }
+  .fullscreen-overlay.show { display:flex; }
+  .fullscreen-img { max-width:100%; max-height:100%; object-fit:contain; }
+  .fullscreen-close { position:absolute; top:14px; right:14px; width:36px; height:36px; background:rgba(255,255,255,.2); border-radius:50%; color:#fff; border:none; font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+</style>
+</head>
+<body>
+
+<div class="avatar-row" id="avatarRow"></div>
+
+<!-- More Faces Inline (头像行下方就地展开，可横滑) -->
+<div class="more-inline" id="moreInline">
+  <div class="more-inline-scroll" id="moreScroll"></div>
+</div>
+
+<div class="filter-hint" id="filterHint"></div>
+<div class="search-bar" id="searchBar">
+  <button class="sb-pill" onclick="clearFilter()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>显示全部</button>
+  <div class="sb-input-wrap">
+    <input class="sb-input" id="searchInput" type="text" placeholder="颜色、物体、特征等" oninput="onSearchInput()" onkeydown="if(event.key==='Enter')doSearch()">
+  </div>
+  <button class="sb-btn" onclick="doSearch()" aria-label="搜索"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
+</div>
+<div class="waterfall" id="photoGrid"></div>
+
+<div class="bottom-nav">
+  <div class="nav-item active"><span id="nav-home"></span><span class="nav-label">首页</span></div>
+  <div class="nav-item"><span id="nav-year"></span><span class="nav-label">流年</span></div>
+  <div class="nav-plus" onclick="onPost()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+  <div class="nav-item"><span id="nav-place"></span><span class="nav-label">方隅</span></div>
+  <div class="nav-item"><span id="nav-video"></span><span class="nav-label">视频</span></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="analyzeModal" onclick="if(event.target===this)closeAnalyze()">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">AI 分析</div>
+    <img class="modal-img" id="analyzeImg" src="" alt="">
+    <div class="info-grid" id="analyzeInfo"></div>
+    <button class="close-btn" onclick="closeAnalyze()">关闭</button>
+  </div>
+</div>
+
+<div class="fullscreen-overlay" id="fullscreenOverlay" onclick="if(event.target===this)closeFullscreen()">
+  <img class="fullscreen-img" id="fullscreenImg" src="" alt="">
+  <button class="fullscreen-close" onclick="closeFullscreen()">✕</button>
+</div>
+
+<script>
+const ICON = {
+  home:'<svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
+  video:'<svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg>',
+  puzzle:'<svg viewBox="0 0 24 24"><path d="M10 4h4a1 1 0 011 1v2a2 2 0 104 0V8h1a1 1 0 011 1v3h-2a2 2 0 100 4h2v3a1 1 0 01-1 1h-4v-2a2 2 0 10-4 0v2H6a1 1 0 01-1-1v-4H3v-3a1 1 0 011-1h2V5a1 1 0 011-1z"/></svg>',
+  grid:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+  year:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>',
+  people:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3.5 3.5 0 010 7"/><path d="M17.5 14c2.3.4 3.5 2.3 3.5 6"/></svg>',
+  place:'<svg viewBox="0 0 24 24"><path d="M12 22s7-7.5 7-13a7 7 0 10-14 0c0 5.5 7 13 7 13z"/><circle cx="12" cy="9" r="2.5"/></svg>',
+  analyze:'<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg>',
+  view:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M3 18l5-4 4 3 3-2 6 5"/></svg>',
+  search:'<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>',
+};
+document.getElementById('nav-home').innerHTML=ICON.home;
+document.getElementById('nav-year').innerHTML=ICON.year;
+document.getElementById('nav-place').innerHTML=ICON.place;
+document.getElementById('nav-video').innerHTML=ICON.video;
+
+const masterPeople = [
+  { id:'p1', name:'张伟', count:99, img:'https://i.pravatar.cc/150?img=11' },
+  { id:'p2', name:'李娜', count:37, img:'https://i.pravatar.cc/150?img=5' },
+  { id:'p3', name:'王芳', count:32, img:'https://i.pravatar.cc/150?img=9' },
+  { id:'p4', name:'赵敏', count:14, img:'https://i.pravatar.cc/150?img=12' },
+  { id:'p5', name:'孙悦', count:11, img:'https://i.pravatar.cc/150?img=44' },
+  { id:'p6', name:'周杰', count:9,  img:'https://i.pravatar.cc/150?img=20' },
+  { id:'p7', name:'吴磊', count:8,  img:'https://i.pravatar.cc/150?img=23' },
+  { id:'p8', name:'刘强', count:7,  img:'https://i.pravatar.cc/150?img=26' },
+  { id:'p9', name:'郑爽', count:6,  img:'https://i.pravatar.cc/150?img=29' },
+  { id:'p10',name:'陈静', count:5,  img:'https://i.pravatar.cc/150?img=14' },
+  { id:'p11',name:'冯绍', count:5,  img:'https://i.pravatar.cc/150?img=32' },
+  { id:'p12',name:'陈乔', count:4,  img:'https://i.pravatar.cc/150?img=35' },
+  { id:'p13',name:'褚静', count:3,  img:'https://i.pravatar.cc/150?img=38' },
+  { id:'p14',name:'卫兰', count:3,  img:'https://i.pravatar.cc/150?img=41' },
+  { id:'p15',name:'蒋雯', count:2,  img:'https://i.pravatar.cc/150?img=8' },
+  { id:'p16',name:'沈腾', count:2,  img:'https://i.pravatar.cc/150?img=17' },
+  { id:'p17',name:'韩雪', count:1,  img:'https://i.pravatar.cc/150?img=2' },
+  { id:'p18',name:'杨幂', count:1,  img:'https://i.pravatar.cc/150?img=50' },
+  { id:'p19',name:'刘菲', count:1,  img:'https://i.pravatar.cc/150?img=53' },
+  { id:'p20',name:'叶倩', count:1,  img:'https://i.pravatar.cc/150?img=56' },
+];
+const TOP_N = 6;
+const people = masterPeople.slice(0, TOP_N);
+const morePeople = masterPeople.slice(TOP_N);
+
+const ratios=[0.75,1,1.33,0.8,1.25,1,0.7,1.4,1,0.9,1.3,0.85];
+const titles=['周末西湖边散步，微风正好','家里的午后时光','商场新开的店逛了逛','动物园里看大熊猫','学校运动会当天','生日聚餐好热闹','海边日落太美了','游乐园玩了一整天','图书馆安静的下午','出发去旅行啦','爬山登顶俯瞰全景','咖啡厅里发呆一下午'];
+const allPhotos=Array.from({length:12},(_,i)=>({
+  id:i+1, seed:i+1, ratio:ratios[i],
+  url:`https://picsum.photos/seed/${i+1}/400/${Math.round(400*ratios[i])}`,
+  person:['p1','p1','p2','p1','p3','p2','p4','p1','p3','p5','p1','p2'][i],
+  title:titles[i],
+  time:'2025-'+String((i%12)+1).padStart(2,'0')+'-15 14:32',
+  loc:['西湖公园','家中客厅','商场','动物园','学校','餐厅','海边','游乐园','图书馆','机场','山区','咖啡厅'][i],
+  scene:['户外·春游','室内·玩耍','购物·逛街','户外·游玩','校园·活动','聚餐·生日','度假·沙滩','游乐场','阅读·学习','旅行·出发','登山·徒步','休闲·下午茶'][i],
+}));
+let selectedPerson=null, searchQuery='';
+
+function renderAvatars(){
+  document.getElementById('avatarRow').innerHTML = people.map(p=>`
+    <div class="avatar-item ${selectedPerson===p.id?'selected':''}" onclick="togglePerson('${p.id}')">
+      <div class="avatar-wrap">
+        <img class="avatar" src="${p.img}" onerror="this.style.background='#DDD'">
+        <span class="badge">${p.count}</span>
+      </div>
+    </div>`).join('') +
+    `<div class="more-avatars" onclick="openMore()">+${morePeople.length}</div>`;
+}
+function togglePerson(pid){ selectedPerson=selectedPerson===pid?null:pid; renderAvatars(); renderMore(); updateFilterHint(); renderPhotos(); }
+function updateFilterHint(){
+  const el=document.getElementById('filterHint');
+  if(searchQuery){ el.textContent=`搜索「${searchQuery}」的结果`; el.className='filter-hint show'; return; }
+  if(selectedPerson){ const p=allPeople().find(x=>x.id===selectedPerson); el.textContent=`已选择「${p.name}」，当前仅显示其相关照片`; el.className='filter-hint show'; }
+  else el.className='filter-hint';
+}
+function allPeople(){ return people.concat(morePeople); }
+
+function openMore(){
+  const el=document.getElementById('moreInline');
+  const btn=document.querySelector('.more-avatars');
+  if(el.classList.contains('show')){ el.className='more-inline'; if(btn) btn.classList.remove('active'); return; }
+  renderMore();
+  el.className='more-inline show';
+  if(btn) btn.classList.add('active');
+}
+function closeMore(){
+  document.getElementById('moreInline').className='more-inline';
+  const btn=document.querySelector('.more-avatars'); if(btn) btn.classList.remove('active');
+}
+function renderMore(){
+  const list=allPeople();
+  document.getElementById('moreScroll').innerHTML = list.map(p=>`
+    <div class="more-inline-face ${selectedPerson===p.id?'selected':''}" onclick="selectMore('${p.id}')">
+      <div class="avatar-wrap">
+        <img class="avatar" src="${p.img}" onerror="this.style.background='#DDD'">
+        <span class="badge">${p.count}</span>
+      </div>
+      <span class="fname">${p.name}</span>
+    </div>`).join('');
+}
+function selectMore(pid){ selectedPerson=selectedPerson===pid?null:pid; renderMore(); renderAvatars(); updateFilterHint(); renderPhotos(); }
+
+function renderTags(){}
+function getFilteredPhotos(){
+  let photos=[...allPhotos];
+  if(selectedPerson) photos=photos.filter(p=>p.person===selectedPerson);
+  if(searchQuery){
+    const q=searchQuery.toLowerCase();
+    photos=photos.filter(p=>{
+      const name=allPeople().find(x=>x.id===p.person)?.name||'';
+      return (p.title+' '+p.loc+' '+p.scene+' '+p.time+' '+name).toLowerCase().includes(q);
+    });
+  }
+  return photos;
+}
+function onSearchInput(){
+  const v=document.getElementById('searchInput').value.trim();
+  if(v===''){ searchQuery=''; renderPhotos(); updateFilterHint(); }
+}
+function doSearch(){
+  searchQuery=document.getElementById('searchInput').value.trim();
+  renderPhotos(); updateFilterHint();
+}
+function clearFilter(){
+  selectedPerson=null; searchQuery='';
+  const inp=document.getElementById('searchInput'); if(inp) inp.value='';
+  renderAvatars(); renderMore(); renderPhotos(); updateFilterHint();
+}
+function renderPhotos(){
+  const grid=document.getElementById('photoGrid');
+  const photos=getFilteredPhotos();
+  if(!photos.length){ grid.innerHTML='<div style="column-span:all;text-align:center;padding:40px;color:#999;">暂无照片</div>'; return; }
+  grid.innerHTML=photos.map(p=>`
+    <div class="xcard" onclick="showFullscreen('${p.url}')">
+      <img class="xcard-img" src="${p.url}" loading="lazy" onerror="this.style.background='#EDEDED'">
+      <div class="xcard-body">
+        <div class="xcard-title">${p.title}</div>
+        <div class="xcard-actions">
+          <button class="xbtn analyze" onclick="event.stopPropagation();showAnalyze(${p.id})">${ICON.analyze} 分析</button>
+          <button class="xbtn" onclick="event.stopPropagation();showFullscreen('${p.url}')">${ICON.view} 原图</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+function analysisText(p){
+  const name = p.person ? (allPeople().find(x=>x.id===p.person)?.name||'未知') : '无';
+  const date = (p.time||'未知').split(' ')[0];
+  // 模拟 photo_fts.analysis_result：Qwen 返回的自由文本结构化描述
+  return `【基础信息分析】
+1. 场景类型：${p.scene}
+2. 色彩氛围：暖色调，明亮清新，自然光柔和，推测为${date}时段拍摄
+
+【人像特征分析】
+3. 人物数量：${p.person ? 1 : 0}
+4. 人物属性：关联人物「${name}」
+5. 外貌特征：详见人脸聚类结果
+
+【环境物体识别】
+6. 主要物体：与「${p.title}」内容相关
+7. 环境元素：${p.loc}
+
+【照片信息总结】
+12. ${p.title}，拍摄于${p.loc}（${date}）。`;
+}
+function showAnalyze(id){
+  const p=allPhotos.find(x=>x.id===id); if(!p) return;
+  document.getElementById('analyzeImg').src=p.url;
+  document.getElementById('analyzeInfo').innerHTML = `<div class="analysis-text">${analysisText(p)}</div>`;
+  document.getElementById('analyzeModal').className='modal-overlay show';
+}
+function closeAnalyze(){ document.getElementById('analyzeModal').className='modal-overlay'; }
+function showFullscreen(url){ document.getElementById('fullscreenImg').src=url; document.getElementById('fullscreenOverlay').className='fullscreen-overlay show'; }
+function closeFullscreen(){ document.getElementById('fullscreenOverlay').className='fullscreen-overlay'; }
+
+function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.className='toast show'; clearTimeout(t._t); t._t=setTimeout(()=>t.className='toast',1600); }
+function onPost(){ showToast('发帖 / 上传（原型占位）'); }
+
+renderAvatars(); renderTags(); renderPhotos();
+</script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+package com.chaijie.app
+
+import androidx.compose.runtime.Composable
+import com.tencent.kuikly.compose.ComposeContainer
+import com.tencent.kuikly.compose.foundation.layout.Arrangement
+import com.tencent.kuikly.compose.foundation.layout.Column
+import com.tencent.kuikly.compose.foundation.layout.fillMaxSize
+import com.tencent.kuikly.compose.material3.Text
+import com.tencent.kuikly.compose.setContent
+import com.tencent.kuikly.compose.ui.Alignment
+import com.tencent.kuikly.compose.ui.Modifier
+import com.tencent.kuikly.compose.ui.graphics.Color
+import com.tencent.kuikly.compose.ui.unit.sp
+import com.tencent.kuikly.core.annotations.Page
+
+@Page("HelloWorld")
+internal class HelloWorldPage : ComposeContainer() {
+    override fun willInit() {
+        super.willInit()
+        setContent {
+            HelloWorldContent()
+        }
+    }
+}
+
+@Composable
+private fun HelloWorldContent() {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Hello, ChaijieApp!",
+            fontSize = 24.sp,
+            color = Color.Black
+        )
+        Text(
+            text = "Powered by Kuikly Compose",
+            fontSize = 14.sp,
+            color = Color.Gray
+        )
+    }
+}

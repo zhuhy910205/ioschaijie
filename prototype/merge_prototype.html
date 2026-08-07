@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>人脸分组合并 · 交互原型</title>
+<style>
+  :root{
+    --bg:#E9E5DE; --card:#F5F2EC; --text:#46413B; --sub:#968D83;
+    --clay:#B07D6B; --g1:#C99A8E; --g2:#B07D6B; --ok:#7FA88A;
+    --warn:#D98E6B; --danger:#B0453A;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:#CFC8BC; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; padding:20px; overflow:hidden;
+  }
+  .stage{
+    width:392px; height:844px; background:var(--bg); border-radius:44px; overflow:hidden;
+    box-shadow:0 30px 80px rgba(70,60,50,.4), 0 0 0 10px #2C2822, 0 0 0 12px #4a443c;
+    position:relative; display:flex; flex-direction:column; touch-action:none;
+  }
+  .statusbar{height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;font-size:15px;font-weight:600;color:var(--text);flex:none}
+  .statusbar .dots{display:flex;gap:4px;align-items:center}
+  .statusbar .dots i{width:9px;height:9px;border-radius:50%;background:var(--text);display:block}
+  .statusbar .batt{width:24px;height:12px;border:1.5px solid var(--text);border-radius:3px;position:relative}
+  .statusbar .batt::after{content:"";position:absolute;inset:1.5px;background:var(--text);border-radius:1px;width:60%}
+
+  .header{padding:2px 18px 10px}
+  .header h1{font-size:19px;font-weight:800;color:var(--text);letter-spacing:1px;display:flex;align-items:center;gap:8px}
+  .header .sub{font-size:11.5px;color:var(--sub);margin-top:5px;display:flex;align-items:center;gap:6px}
+  .header .sub b{color:var(--clay);font-weight:700}
+
+  /* 模式切换 */
+  .modeswitch{display:flex;background:rgba(255,255,255,.55);border-radius:14px;padding:4px;margin:2px 18px 10px;gap:2px}
+  .mode{flex:1;text-align:center;padding:9px 2px;border-radius:11px;font-size:12px;color:var(--sub);cursor:pointer;transition:.18s;font-weight:600}
+  .mode .mi{font-size:15px;display:block;margin-bottom:2px}
+  .mode.on{background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;box-shadow:0 4px 12px rgba(176,125,107,.35)}
+
+  /* 提示条 */
+  .hintbar{margin:0 18px 10px;border-radius:12px;padding:9px 12px;font-size:11.5px;line-height:1.6;display:flex;align-items:center;gap:8px;transition:.2s}
+  .hintbar.normal{background:rgba(176,125,107,.10);color:var(--clay)}
+  .hintbar.warn{background:rgba(217,142,107,.16);color:#A05A38}
+  .hintbar .hdot{width:7px;height:7px;border-radius:50%;background:var(--clay);flex:none;animation:blink 1.2s infinite}
+  @keyframes blink{50%{opacity:.25}}
+
+  /* 列表 */
+  .list{flex:1;overflow-y:auto;padding:0 18px 6px;position:relative}
+  .list::-webkit-scrollbar{display:none}
+  .grp{
+    display:flex;align-items:center;gap:12px;background:var(--card);border-radius:16px;
+    padding:12px 13px;margin-bottom:10px;border:1.5px solid rgba(255,255,255,.85);
+    position:relative;transition:transform .15s, box-shadow .15s, opacity .3s, border-color .2s;
+    cursor:grab; user-select:none; -webkit-user-select:none;
+  }
+  .grp:active{cursor:grabbing}
+  .grp.dragging{position:fixed;z-index:999;opacity:.94;box-shadow:0 16px 34px rgba(70,50,40,.35);transform:scale(1.04);pointer-events:none;width:332px;margin:0}
+  .grp.dropzone{outline:2.5px dashed var(--clay);outline-offset:1px;border-color:var(--clay);background:#FBF7F1}
+  .grp.dropzone .face{transform:scale(1.06)}
+  .grp.pickmode{cursor:pointer}
+  .grp.picked{border-color:var(--clay);background:#FBF6F0;box-shadow:0 0 0 1px var(--clay)}
+  .grp.fading{opacity:0;transform:scale(.86) translateX(30px)}
+  .grp.glow{animation:glow 1.2s ease}
+  @keyframes glow{0%,100%{box-shadow:none}50%{box-shadow:0 0 0 3px rgba(127,168,138,.5)}}
+  .grp.growup{animation:growup .5s cubic-bezier(.2,1.4,.4,1)}
+  @keyframes growup{0%{transform:scale(.92)}60%{transform:scale(1.03)}100%{transform:scale(1)}}
+
+  .face{width:52px;height:52px;border-radius:14px;flex:none;display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;overflow:hidden;position:relative;transition:transform .2s}
+  .face img{width:100%;height:100%;object-fit:cover}
+  .ginfo{flex:1;min-width:0}
+  .gname{font-size:15px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .gname .cnt{font-size:11.5px;font-weight:700;color:var(--clay);background:rgba(176,125,107,.13);padding:2px 8px;border-radius:99px}
+  .gdesc{font-size:11px;color:var(--sub);margin-top:4px;display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+  .gdesc em{font-style:normal;background:#fff;border:1px solid rgba(0,0,0,.06);padding:1px 7px;border-radius:6px;font-size:10px}
+  .simtag{
+    font-size:10.5px;font-weight:700;color:#fff;background:linear-gradient(135deg,#E8A37E,#D97A52);
+    padding:2px 8px;border-radius:99px;cursor:pointer;box-shadow:0 2px 6px rgba(217,122,82,.35);transition:.15s;
+    animation:simPulse 2.4s infinite;
+  }
+  @keyframes simPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+  .simtag:active{transform:scale(.94)}
+  .thumbrow{display:flex;margin-top:5px}
+  .thumbrow i{width:20px;height:20px;border-radius:6px;margin-right:-5px;border:1.5px solid var(--card);background-size:cover;background-position:center}
+
+  .checkmark{
+    position:absolute;top:10px;right:10px;width:22px;height:22px;border-radius:50%;
+    border:2px solid #D8D1C7;display:none;align-items:center;justify-content:center;
+    font-size:12px;color:#fff;transition:.15s;background:#fff;
+  }
+  .grp.picked .checkmark{display:flex;background:linear-gradient(135deg,var(--g1),var(--g2));border-color:transparent}
+
+  /* 底部操作栏 */
+  .bottombar{flex:none;padding:10px 18px 26px}
+  .mergebar{
+    display:none;align-items:center;gap:10px;background:#fff;border-radius:18px;
+    padding:8px 8px 8px 16px;box-shadow:0 -8px 30px rgba(70,50,40,.12);margin-bottom:10px;
+  }
+  .mergebar.show{display:flex;animation:slideup .25s ease}
+  @keyframes slideup{from{transform:translateY(20px);opacity:0}}
+  .mergebar .minfo{flex:1;font-size:12px;color:var(--sub);line-height:1.5}
+  .mergebar .minfo b{color:var(--clay);font-size:14px}
+  .btn{
+    display:flex;align-items:center;justify-content:center;gap:6px;border:none;cursor:pointer;
+    background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;border-radius:999px;
+    font-size:14px;font-weight:700;letter-spacing:1px;padding:13px 20px;box-shadow:0 6px 16px rgba(176,125,107,.4);
+    transition:.15s;width:100%;
+  }
+  .btn:active{transform:scale(.96)}
+  .btn.ghost{background:rgba(176,125,107,.12);color:var(--clay);box-shadow:none}
+  .btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+  .btn.sm{padding:11px 18px;font-size:13px;width:auto}
+  .btn.merge{width:auto;padding:12px 22px}
+
+  /* 弹窗 */
+  .mask{position:absolute;inset:0;background:rgba(60,50,40,.45);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+  .mask.show{display:flex;animation:fadein .2s}
+  @keyframes fadein{from{opacity:0}}
+  .modal{
+    width:86%;background:var(--card);border-radius:22px;padding:20px;position:relative;
+    box-shadow:0 24px 60px rgba(50,40,30,.35);animation:pop .25s cubic-bezier(.2,1.3,.4,1);
+  }
+  @keyframes pop{from{transform:scale(.88);opacity:0}}
+  .modal h3{font-size:16px;font-weight:800;color:var(--text);text-align:center;margin-bottom:4px}
+  .modal .msub{font-size:11.5px;color:var(--sub);text-align:center;margin-bottom:14px}
+  .mvrow{display:flex;align-items:center;gap:8px;background:#fff;border-radius:13px;padding:10px 12px;margin-bottom:8px}
+  .mvrow .mvface{width:38px;height:38px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff}
+  .mvrow .mvname{flex:1;font-size:13px;font-weight:600;color:var(--text)}
+  .mvrow .mvcount{font-size:11.5px;color:var(--sub);font-weight:600}
+  .mvarrow{text-align:center;color:var(--clay);font-size:17px;font-weight:800;margin:2px 0}
+  .mvresult{display:flex;align-items:center;gap:8px;background:rgba(127,168,138,.14);border:1px dashed rgba(127,168,138,.6);border-radius:13px;padding:10px 12px;margin-bottom:14px}
+  .mvresult .mvface{width:38px;height:38px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff}
+  .mvresult .mvname{flex:1;font-size:13px;font-weight:700;color:var(--text)}
+  .mvresult .mvcount{font-size:12px;font-weight:800;color:var(--ok)}
+  .modalfoot{display:flex;gap:10px}
+  .modalfoot .btn{flex:1}
+  .rename{display:flex;align-items:center;gap:8px;background:#fff;border-radius:12px;padding:9px 12px;margin-bottom:14px;border:1.5px solid rgba(176,125,107,.25)}
+  .rename input{flex:1;border:none;outline:none;font-size:13px;color:var(--text);background:transparent;font-family:inherit}
+  .rename span{font-size:11px;color:var(--sub)}
+
+  /* toast */
+  .toast{
+    position:absolute;left:50%;bottom:110px;transform:translateX(-50%) translateY(20px);
+    background:#33302B;color:#fff;font-size:12.5px;border-radius:99px;padding:11px 18px;
+    display:flex;align-items:center;gap:12px;opacity:0;pointer-events:none;transition:.28s;z-index:2000;white-space:nowrap;box-shadow:0 10px 30px rgba(0,0,0,.3);
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+  .toast .undo{color:#FFD9B0;font-weight:700;cursor:pointer;padding:4px 8px;border-radius:8px}
+  .toast .undo:active{background:rgba(255,255,255,.15)}
+
+  /* 模式说明卡片 */
+  .modetip{margin:0 18px 10px;background:rgba(255,255,255,.5);border-radius:12px;padding:9px 12px;font-size:11px;color:var(--sub);line-height:1.7;display:none}
+  .modetip.show{display:block}
+  .modetip b{color:var(--clay)}
+
+  /* 空态/结果 */
+  .mergestat{margin:0 18px 10px;border-radius:14px;background:rgba(127,168,138,.12);padding:10px 14px;font-size:12px;color:#5F8468;display:none;align-items:center;gap:8px}
+  .mergestat.show{display:flex}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="statusbar">
+    <span>9:41</span>
+    <span class="dots"><i></i><i></i><i></i></span>
+    <span class="batt"></span>
+  </div>
+
+  <div class="header">
+    <h1>👥 人脸分组 <span style="font-size:12px;color:var(--sub);font-weight:600">合并交互原型 v1</span></h1>
+    <div class="sub">共 <b id="statTotal">0</b> 张照片 · <b id="statGroups">0</b> 个分组 · 未上传</div>
+  </div>
+
+  <div class="modeswitch">
+    <div class="mode on" data-mode="drag"><span class="mi">🖐️</span>拖拽合并</div>
+    <div class="mode" data-mode="pick"><span class="mi">☝️</span>长按多选</div>
+    <div class="mode" data-mode="smart"><span class="mi">✨</span>相似度推荐</div>
+  </div>
+
+  <div class="modetip" id="modetip"></div>
+  <div class="hintbar normal" id="hintbar"><span class="hdot"></span><span id="hinttext">按住一个分组，拖到另一个分组上松手即可合并</span></div>
+  <div class="mergestat" id="mergestat"></div>
+
+  <div class="list" id="list"></div>
+
+  <div class="bottombar">
+    <div class="mergebar" id="mergebar">
+      <div class="minfo">已选 <b id="pickCount">0</b> 组<br><span style="font-size:10.5px">合并后将保留人数最多的组名</span></div>
+      <button class="btn merge" id="pickMergeBtn" disabled>合并所选</button>
+    </div>
+    <button class="btn" id="finishBtn">✓ 合并完成，去上传（240 张）</button>
+  </div>
+
+  <!-- 合并确认弹窗 -->
+  <div class="mask" id="mask">
+    <div class="modal" id="modal"></div>
+  </div>
+
+  <div class="toast" id="toast"><span id="toastText"></span><span class="undo" id="undoBtn">撤销</span></div>
+</div>
+
+<script>
+// ================= 模拟数据（贴近真实聚类结果） =================
+// faceColor 用于生成头像色块；sims 表示"疑似同一个人"的推荐关系
+const INIT_GROUPS = [
+  { id:0, name:"朱言宥",  count:124, color:['#C99A8E','#B07D6B'], emoji:'👤', matched:true,  sim:null },
+  { id:1, name:"赵梦琰",  count:15,  color:['#A8C8D8','#7E9AA8'], emoji:'👩', matched:true,  sim:null },
+  { id:2, name:"人脸组 3", count:8,  color:['#E8B4A0','#D08A72'], emoji:'👤', matched:false, sim:{to:0, score:0.61} },  // 疑似朱言宥
+  { id:3, name:"人脸组 4", count:6,  color:['#C9A9D8','#A88FB8'], emoji:'👤', matched:false, sim:{to:0, score:0.58} },  // 疑似朱言宥
+  { id:4, name:"人脸组 5", count:9,  color:['#F0B9A8','#C08368'], emoji:'👩', matched:false, sim:{to:1, score:0.63} },  // 疑似赵梦琰
+  { id:5, name:"人脸组 6", count:5,  color:['#E5B8C8','#C08BA0'], emoji:'👤', matched:false, sim:null },
+  { id:6, name:"人脸组 7", count:4,  color:['#A8D0B8','#7FA88A'], emoji:'👴', matched:false, sim:null },
+  { id:7, name:"人脸组 8", count:3,  color:['#D8C4A0','#B8A078'], emoji:'👶', matched:false, sim:null },
+  { id:8, name:"人脸组 9", count:7,  color:['#A8B8E0','#7E8AC0'], emoji:'👩', matched:false, sim:{to:1, score:0.55} },  // 疑似赵梦琰
+  { id:9, name:"人脸组 10",count:6,  color:['#E0A8B8','#C07E94'], emoji:'👤', matched:false, sim:null },
+  { id:10,name:"人脸组 11",count:5,  color:['#B8D8A8','#8AA878'], emoji:'👦', matched:false, sim:{to:0, score:0.57} },  // 疑似朱言宥
+  { id:11,name:"人脸组 12",count:3,  color:['#D0B8E0','#A888C0'], emoji:'👵', matched:false, sim:null },
+];
+const AVATAR_SEED = ['https://api.dicebear.com/7.x/avataaars/svg?seed=',
+  'https://api.dicebear.com/7.x/bottts/svg?seed='];
+
+let groups = JSON.parse(JSON.stringify(INIT_GROUPS));
+let mode = 'drag';
+let history = [];          // 撤销栈
+let currentDrag = null;    // 拖拽中的组
+let dragTarget = null;     // 高亮目标
+let pickSet = new Set();   // 多选集合
+
+// ================= 渲染 =================
+function render(){
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  groups.forEach(g=>{
+    const el = document.createElement('div');
+    el.className = 'grp' + (pickSet.has(g.id) ? ' picked' : '') + (mode==='pick' ? ' pickmode':'');
+    el.dataset.id = g.id;
+    // 缩略图模拟：混合使用头像服务 + 渐变
+    const seed = AVATAR_SEED[g.id % 2] + (g.name + g.count);
+    const thumbs = [];
+    for(let i=0;i<Math.min(g.count,6);i++) thumbs.push(seed + i);
+    el.innerHTML = `
+      <div class="face" style="background:linear-gradient(135deg,${g.color[0]},${g.color[1]})">
+        ${g.matched ? `<img src="${seed}">` : `<span>${g.emoji}</span>`}
+      </div>
+      <div class="ginfo">
+        <div class="gname">${g.name} <span class="cnt">${g.count} 张</span></div>
+        <div class="gdesc">
+          <em>${g.matched ? '★ 已匹配' : '已识别为同一人'}</em>
+          ${g.sim ? `<span class="simtag" data-sim-to="${g.sim.to}">与「${groups.find(x=>x.id===g.sim.to)?.name||''}」相似 ${Math.round(g.sim.score*100)}%</span>` : ''}
+        </div>
+        <div class="thumbrow">${thumbs.map((t,i)=>`<i style="background-image:url(${t})"></i>`).join('')}</div>
+      </div>
+      <span class="checkmark">✓</span>`;
+    list.appendChild(el);
+  });
+  document.getElementById('statGroups').textContent = groups.length;
+  document.getElementById('statTotal').textContent = groups.reduce((s,g)=>s+g.count,0);
+  // 智能推荐模式下：自动高亮相似关系
+  if(mode==='smart') document.querySelectorAll('.simtag').forEach(t=>t.style.display='inline-block');
+  else document.querySelectorAll('.simtag').forEach(t=>t.style.display='inline-block');
+  updateMergeBar();
+}
+
+function updateMergeBar(){
+  const bar = document.getElementById('mergebar');
+  const cnt = document.getElementById('pickCount');
+  const btn = document.getElementById('pickMergeBtn');
+  cnt.textContent = pickSet.size;
+  bar.classList.toggle('show', mode==='pick' && pickSet.size>=2);
+  btn.disabled = pickSet.size<2;
+}
+
+// ================= 提示 =================
+function setHint(txt, warn){
+  document.getElementById('hinttext').textContent = txt;
+  const bar = document.getElementById('hintbar');
+  bar.className = 'hintbar ' + (warn ? 'warn':'normal');
+}
+function showToast(txt, undoable){
+  const t = document.getElementById('toast');
+  document.getElementById('toastText').textContent = txt;
+  document.getElementById('undoBtn').style.display = undoable ? 'inline':'none';
+  t.classList.add('show');
+  clearTimeout(t._tm);
+  t._tm = setTimeout(()=>t.classList.remove('show'), 3200);
+}
+
+// ================= 合并核心 =================
+function doMerge(fromId, toId, rename){
+  const fi = groups.findIndex(g=>g.id===fromId);
+  const ti = groups.findIndex(g=>g.id===toId);
+  if(fi<0||ti<0||fi===ti) return;
+  const from = groups[fi], to = groups[ti];
+  history.push({from:JSON.parse(JSON.stringify(from)), to:JSON.parse(JSON.stringify(to)), fromIdx:fi, toIdx:ti});
+  to.count += from.count;
+  if(rename && rename.trim()) to.name = rename.trim();
+  else if(!to.matched && from.matched){ to.matched = true; to.name = from.name; to.emoji = from.emoji; to.color = from.color; }
+  // 继承相似标签
+  to.sim = null;
+  groups = groups.filter(g=>g.id!==fromId);
+  // 修正其他组的 sim.to 引用
+  groups.forEach(g=>{ if(g.sim && g.sim.to===fromId) g.sim.to = toId; });
+  render();
+  // 高亮目标卡片
+  const els = [...document.querySelectorAll('.grp')];
+  const tEl = els.find(e=>+e.dataset.id===toId);
+  if(tEl){ tEl.classList.add('growup'); setTimeout(()=>tEl.classList.remove('growup'),600); }
+  showToast(`已合并为「${to.name}」· 共 ${to.count} 张`, true);
+}
+
+function undo(){
+  const h = history.pop();
+  if(!h) return;
+  const existed = groups.some(g=>g.id===h.to.id);
+  groups = groups.map(g=> g.id===h.to.id ? h.to : g);
+  if(!existed) groups.push(h.to);
+  groups.push(h.from);
+  groups.sort((a,b)=>a.id-b.id);
+  render();
+  const el = [...document.querySelectorAll('.grp')].find(e=>+e.dataset.id===h.from.id);
+  if(el) el.classList.add('glow');
+  showToast('已撤销合并', false);
+}
+
+// ================= 合并确认弹窗 =================
+function showMergeModal(fromIds, toId, modeLabel){
+  const mask = document.getElementById('mask');
+  const modal = document.getElementById('modal');
+  const froms = fromIds.map(id=>groups.find(g=>g.id===id)).filter(Boolean);
+  const to = groups.find(g=>g.id===toId) || froms[0];
+  const total = froms.reduce((s,g)=>s+g.count,0) + (to && !froms.includes(to) ? to.count : 0);
+  const baseName = to ? to.name : froms.reduce((p,c)=>p.count>=c.count?p:c).name;
+  const fromHtml = froms.map(g=>`
+    <div class="mvrow">
+      <div class="mvface" style="background:linear-gradient(135deg,${g.color[0]},${g.color[1]})">${g.matched?'':g.emoji}</div>
+      <div class="mvname">${g.name}</div><div class="mvcount">${g.count} 张</div>
+    </div>`).join('');
+  modal.innerHTML = `
+    <h3>合并分组</h3>
+    <div class="msub">${modeLabel} · 合并后人数将累加</div>
+    ${fromHtml}
+    ${to && !froms.includes(to) ? `<div class="mvarrow">↓ 合并到</div>
+    <div class="mvrow">
+      <div class="mvface" style="background:linear-gradient(135deg,${to.color[0]},${to.color[1]})">${to.matched?'':to.emoji}</div>
+      <div class="mvname">${to.name}</div><div class="mvcount">${to.count} 张</div>
+    </div>` : ''}
+    <div class="mvarrow">↓ 合并结果</div>
+    <div class="mvresult">
+      <div class="mvface" style="background:linear-gradient(135deg,${ (to||froms[0]).color[0]},${(to||froms[0]).color[1]})"></div>
+      <div class="mvname">${baseName}</div><div class="mvcount">共 ${total} 张</div>
+    </div>
+    <div class="rename"><span>组名</span><input id="newName" value="${baseName}" placeholder="输入分组名称"></div>
+    <div class="modalfoot">
+      <button class="btn ghost" id="cancelBtn">取消</button>
+      <button class="btn" id="confirmBtn">确认合并</button>
+    </div>`;
+  mask.classList.add('show');
+  document.getElementById('cancelBtn').onclick = ()=>mask.classList.remove('show');
+  document.getElementById('confirmBtn').onclick = ()=>{
+    const rename = document.getElementById('newName').value;
+    if(to && !froms.includes(to)){
+      doMerge(froms[0].id, to.id, rename);
+    } else if(froms.length>=2){
+      const keep = froms.reduce((p,c)=>p.count>=c.count?p:c);
+      froms.filter(g=>g.id!==keep.id).forEach(g=>doMerge(g.id, keep.id, rename));
+    }
+    mask.classList.remove('show');
+  };
+  mask.onclick = e=>{ if(e.target===mask) mask.classList.remove('show'); };
+}
+
+// ================= 拖拽合并（模式A） =================
+function initDrag(){
+  const list = document.getElementById('list');
+  let longPressTimer=null, startX=0, startY=0, activated=false;
+  list.addEventListener('pointerdown', e=>{
+    if(mode!=='drag') return;
+    const el = e.target.closest('.grp'); if(!el) return;
+    const id = +el.dataset.id;
+    startX = e.clientX; startY = e.clientY; activated=false;
+    clearTimeout(longPressTimer);
+    longPressTimer = setTimeout(()=>{
+      if(mode!=='drag') return;
+      activated = true;
+      currentDrag = { id, el, offsetX: e.clientX - el.getBoundingClientRect().left, offsetY: e.clientY - el.getBoundingClientRect().top };
+      const r = el.getBoundingClientRect();
+      el.classList.add('dragging');
+      el.style.left = r.left + 'px';
+      el.style.top = r.top + 'px';
+      el.style.width = r.width + 'px';
+      setHint('拖动到目标分组上松手合并', true);
+      navigator.vibrate && navigator.vibrate(20);
+    }, 260);
+  });
+  list.addEventListener('pointermove', e=>{
+    if(e.clientX < -100 || e.clientX > window.innerWidth + 100 || e.clientY < -100 || e.clientY > window.innerHeight + 100){ endDrag(e); return; }
+    if(!currentDrag) return;
+    e.preventDefault();
+    const el = currentDrag.el;
+    el.style.left = (e.clientX - currentDrag.offsetX) + 'px';
+    el.style.top = (e.clientY - currentDrag.offsetY) + 'px';
+    // 命中检测
+    const target = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.grp');
+    const targetId = target && target!==el ? +target.dataset.id : null;
+    if(targetId !== (dragTarget?dragTarget.id:null)){
+      document.querySelectorAll('.grp.dropzone').forEach(x=>x.classList.remove('dropzone'));
+      if(targetId!=null){ target.classList.add('dropzone'); dragTarget = {id:targetId}; }
+      else dragTarget = null;
+    }
+  });
+  const endDrag = e=>{
+    clearTimeout(longPressTimer);
+    if(currentDrag){
+      const fromId = currentDrag.id;
+      currentDrag.el.classList.remove('dragging');
+      currentDrag.el.style.left='';currentDrag.el.style.top='';currentDrag.el.style.width='';
+      document.querySelectorAll('.grp.dropzone').forEach(x=>x.classList.remove('dropzone'));
+      if(dragTarget && dragTarget.id!==fromId){
+        showMergeModal([fromId], dragTarget.id, '拖拽合并');
+      } else {
+        setHint('按住一个分组，拖到另一个分组上松手即可合并');
+      }
+      currentDrag=null; dragTarget=null;
+    }
+  };
+  list.addEventListener('pointerup', endDrag);
+  list.addEventListener('pointercancel', endDrag);
+  // 长按但没拖 = 也弹出合并选择
+  list.addEventListener('click', e=>{
+    if(mode!=='drag' || activated) return;
+    const el = e.target.closest('.grp'); if(!el) return;
+    const id = +el.dataset.id;
+    // 单击卡片：进入"从该组出发"的选择模式
+    pickSet.clear(); pickSet.add(id);
+    switchMode('pick');
+    setHint(`已选中「${groups.find(g=>g.id===id).name}」，再点其他分组即可多选`, true);
+  });
+}
+
+// ================= 长按多选（模式B） =================
+function initPick(){
+  const list = document.getElementById('list');
+  let timer=null;
+  list.addEventListener('pointerdown', e=>{
+    if(mode!=='pick') return;
+    const el = e.target.closest('.grp'); if(!el) return;
+    const id = +el.dataset.id;
+    clearTimeout(timer);
+    timer = setTimeout(()=>{
+      if(pickSet.size===0){ pickSet.add(id); render(); navigator.vibrate && navigator.vibrate(20); }
+    }, 300);
+  });
+  list.addEventListener('pointerup', ()=>clearTimeout(timer));
+  list.addEventListener('pointercancel', ()=>clearTimeout(timer));
+  list.addEventListener('click', e=>{
+    if(mode!=='pick') return;
+    const el = e.target.closest('.grp'); if(!el) return;
+    const id = +el.dataset.id;
+    if(pickSet.has(id)) pickSet.delete(id); else pickSet.add(id);
+    render();
+    if(pickSet.size===0) setHint('长按第一个分组开始选择，再点其他分组');
+    else setHint(`已选 ${pickSet.size} 组，点下方「合并所选」`);
+  });
+  document.getElementById('pickMergeBtn').onclick = ()=>{
+    showMergeModal([...pickSet], null, '多选合并');
+  };
+}
+
+// ================= 相似度推荐（模式C） =================
+function initSmart(){
+  const list = document.getElementById('list');
+  list.addEventListener('click', e=>{
+    if(mode!=='smart') return;
+    const tag = e.target.closest('.simtag');
+    if(tag){
+      const fromId = +tag.closest('.grp').dataset.id;
+      const toId = +tag.dataset.simTo;
+      showMergeModal([fromId], toId, '相似度推荐');
+    }
+  });
+}
+
+// ================= 模式切换 =================
+function switchMode(m){
+  mode = m;
+  document.querySelectorAll('.mode').forEach(x=>x.classList.toggle('on', x.dataset.mode===m));
+  pickSet.clear();
+  const tips = {
+    drag:  '🖐️ 按住分组卡片，拖到目标分组上松手 → 确认合并。拖动时卡片会浮起跟随手指。',
+    pick:  '☝️ 长按第一个分组进入选择，再点其他分组（可多点）。选好后点底部「合并所选」。',
+    smart: '✨ 系统自动比对相似度，高相似分组显示橙色标签。点标签一键合并。',
+  };
+  const tip = document.getElementById('modetip');
+  tip.innerHTML = tips[m];
+  tip.classList.add('show');
+  const hints = {
+    drag:  '按住一个分组，拖到另一个分组上松手即可合并',
+    pick:  '长按第一个分组开始选择，再点其他分组',
+    smart: '点击橙色相似度标签，一键合并疑似同一人的分组',
+  };
+  setHint(hints[m]);
+  render();
+}
+
+// ================= 初始化 =================
+document.querySelectorAll('.mode').forEach(el=>{
+  el.onclick = ()=>switchMode(el.dataset.mode);
+});
+document.getElementById('undoBtn').onclick = undo;
+document.getElementById('finishBtn').onclick = ()=>{
+  showToast('原型演示：确认合并方案后再在 App 中实现', false);
+};
+switchMode('drag');
+initDrag(); initPick(); initSmart();
+// 合并统计提示
+let shown=false;
+setInterval(()=>{
+  if(!shown && document.getElementById('statGroups').textContent*1 < 12){
+    shown=true;
+    const s=document.getElementById('mergestat');
+    s.classList.add('show');
+    s.innerHTML='✅ 已合并 '+ (12 - document.getElementById('statGroups').textContent*1) +' 个碎片分组，疑似同一人的分组已被归并';
+  }
+}, 600);
+</script>
+</body>
+</html>

@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>视频 · 柴杰相册</title>
+<style>
+  :root{
+    --bg:#E9E5DE; --card:#F5F2EC; --text-primary:#46413B; --text-secondary:#968D83;
+    --accent:#A88F79; --accent-light:#EAE1D8; --red:#B07D6B;
+    --border:#E0DAD1; --radius:16px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{font-family:-apple-system,'PingFang SC','Helvetica Neue',sans-serif;
+    background:linear-gradient(160deg,#EFEAE2 0%,#E3DDD3 100%);color:var(--text-primary);
+    max-width:480px;margin:0 auto;min-height:100vh;min-height:100dvh;position:relative;overflow-x:hidden;padding-bottom:92px}
+  body::before{content:'';position:fixed;inset:0;z-index:-1;background:
+    radial-gradient(circle at 18% 14%,rgba(168,143,121,.20),transparent 42%),
+    radial-gradient(circle at 86% 10%,rgba(176,125,107,.16),transparent 44%),
+    radial-gradient(circle at 72% 90%,rgba(201,154,142,.20),transparent 46%)}
+
+  /* ===== 顶部 ===== */
+  .topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:12px;padding:12px 14px;
+    -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+    background:linear-gradient(180deg,rgba(245,242,236,.82),rgba(245,242,236,.4));border-bottom:1px solid rgba(255,255,255,.5)}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:2px;color:var(--text-primary)}
+  .brand .logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#C99A8E,#B07D6B);
+    display:grid;place-items:center;box-shadow:0 6px 16px rgba(176,125,107,.4)}
+  .brand .logo svg{width:16px;height:16px}
+  .topbar .spacer{flex:1}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.5);
+    border:1px solid rgba(255,255,255,.6);color:var(--text-primary);font-size:13px;cursor:pointer;transition:.2s;white-space:nowrap}
+  .pill:active{transform:scale(.94)}
+  .pill.accent{background:linear-gradient(135deg,#C99A8E,#B07D6B);border:none;color:#fff;font-weight:600;box-shadow:0 6px 16px rgba(176,125,107,.35)}
+  .pill svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ===== 上传区 ===== */
+  .hero{margin:10px 14px 0;border-radius:18px;padding:14px 16px;background:rgba(245,242,236,.65);
+    -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.55);box-shadow:0 6px 22px rgba(70,65,59,.10)}
+  .hero h1{font-size:19px;font-weight:800}
+  .hero h1 .grad{background:linear-gradient(120deg,#C99A8E,#B07D6B);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p{color:var(--text-secondary);font-size:12px;margin-top:3px}
+  .dropzone{display:flex;align-items:center;gap:12px;margin-top:12px;border:2px dashed rgba(168,143,121,.4);border-radius:14px;padding:13px 15px;cursor:pointer;background:rgba(255,255,255,.35);transition:.25s}
+  .dropzone:active{border-color:var(--accent);background:var(--accent-light)}
+  .dz-icon{width:42px;height:42px;flex:none;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#C99A8E,#B07D6B);box-shadow:0 6px 16px rgba(176,125,107,.35)}
+  .dz-icon svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .dropzone b{font-size:14px;display:block;color:var(--text-primary)}
+  .dropzone span{color:var(--text-secondary);font-size:11px;display:block;margin-top:2px}
+  .upload-meta{display:flex;gap:10px;margin-top:12px}
+  .upload-meta label{flex:1;display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--text-secondary)}
+  .upload-meta input{background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.6);border-radius:10px;padding:8px 10px;color:var(--text-primary);font-size:12px;width:100%}
+  .upload-meta input::placeholder{color:#B0A698}
+  .upload-row{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+  .up-card{display:flex;align-items:center;gap:12px;padding:12px 13px;border-radius:13px;background:rgba(255,255,255,.45);border:1px solid rgba(255,255,255,.6);animation:fade .25s}
+  .up-thumb{width:44px;height:44px;border-radius:10px;flex:none;background:linear-gradient(135deg,#C99A8E,#A88F79);display:grid;place-items:center}
+  .up-thumb svg{width:18px;height:18px;stroke:#fff;fill:none;stroke-width:2}
+  .up-main{flex:1;min-width:0}
+  .up-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .up-sub{font-size:11px;color:var(--text-secondary);margin-top:3px}
+  .bar{height:5px;border-radius:99px;background:rgba(70,65,59,.12);margin-top:7px;overflow:hidden}
+  .bar>i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#C99A8E,#B07D6B);transition:width .2s}
+  .up-pct{font-size:11px;color:var(--text-secondary);flex:none;width:38px;text-align:right}
+  .up-done{color:#7FA37E}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  /* ===== 区块标题 & 筛选 ===== */
+  .sec-head{display:flex;align-items:center;justify-content:space-between;margin:20px 16px 12px}
+  .sec-head h2{font-size:17px;font-weight:700}
+  .chips{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex-shrink:0;padding:6px 13px;border-radius:999px;font-size:12px;background:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.6);cursor:pointer;transition:.2s;white-space:nowrap;color:var(--text-secondary)}
+  .chip.on{background:var(--accent);border:none;color:#fff;font-weight:600;box-shadow:0 2px 8px rgba(168,143,121,.35)}
+
+  /* ===== 视频卡片墙 ===== */
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:0 14px 20px}
+  .vcard{position:relative;aspect-ratio:16/10;border-radius:var(--radius);cursor:pointer;overflow:hidden;background:#EDEDED;border:1px solid rgba(255,255,255,.5);box-shadow:0 4px 16px rgba(70,65,59,.10);transition:transform .15s}
+  .vcard:active{transform:scale(.96)}
+  .vcover{position:absolute;inset:0;background-size:cover;background-position:center}
+  .vtype{position:absolute;left:8px;top:8px;font-size:10px;font-weight:600;padding:3px 7px;border-radius:7px;background:rgba(255,255,255,.85);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);color:var(--accent)}
+  .vtype.made{color:var(--red)}
+  .dur{position:absolute;right:8px;bottom:8px;font-size:10.5px;font-weight:600;padding:2px 6px;border-radius:6px;background:rgba(70,65,59,.6);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);color:#fff}
+  .playring{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(.9);width:44px;height:44px;border-radius:50%;
+    background:rgba(255,255,255,.3);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.55);display:grid;place-items:center;box-shadow:0 4px 14px rgba(70,65,59,.2)}
+  .playring svg{width:20px;height:20px;fill:var(--red);margin-left:2px}
+  .meta{position:absolute;left:0;right:0;bottom:0;padding:10px;border-radius:0 0 var(--radius) var(--radius);background:linear-gradient(180deg,transparent,rgba(70,65,59,.75))}
+  .meta h3{font-size:13px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .meta p{font-size:10.5px;color:rgba(255,255,255,.75);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+  .empty{grid-column:1/-1;text-align:center;color:var(--text-secondary);padding:50px 16px;border:1px dashed var(--border);border-radius:var(--radius);font-size:13px;background:rgba(245,242,236,.4)}
+
+  /* ===== 沉浸播放器（米色毛玻璃弹层，屏幕区保持深色） ===== */
+  .player{position:fixed;inset:0;z-index:120;display:none;background:rgba(245,242,236,.82);-webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);flex-direction:column;animation:fade .25s;max-width:480px;margin:0 auto}
+  .player.show{display:flex}
+  .player-top{display:flex;align-items:center;gap:10px;padding:12px 14px;flex-shrink:0}
+  .player-top .title{font-size:15px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stage{position:relative;flex:1;min-height:0;display:grid;place-items:center;padding:0 12px}
+  .screen{position:relative;width:100%;aspect-ratio:16/9;border-radius:14px;overflow:hidden;background:#000;box-shadow:0 24px 60px rgba(70,65,59,.35);display:grid;place-items:center;border:1px solid rgba(255,255,255,.6)}
+  .pgrad{position:absolute;inset:0;background-size:cover}
+  .bigplay{width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.2);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.5);display:grid;place-items:center;cursor:pointer;transition:.2s;z-index:3}
+  .bigplay:active{transform:scale(.92)}
+  .bigplay svg{width:26px;height:26px;fill:#fff;margin-left:3px}
+  .pbar{position:absolute;left:0;right:0;bottom:0;padding:14px 14px 10px;z-index:4;background:linear-gradient(180deg,transparent,rgba(0,0,0,.72))}
+  .track{height:5px;border-radius:99px;background:rgba(255,255,255,.25);cursor:pointer;position:relative}
+  .track>i{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:99px;background:linear-gradient(90deg,#C99A8E,#B07D6B)}
+  .ctrls{display:flex;align-items:center;gap:16px;margin-top:9px;color:#fff}
+  .ctrls button{background:none;border:none;color:#fff;cursor:pointer;display:grid;place-items:center;padding:0}
+  .ctrls svg{width:21px;height:21px;fill:currentColor}
+  .ctrls .t{font-size:11.5px;color:#ddd;font-variant-numeric:tabular-nums}
+  .ctrls .spacer{flex:1}
+  .speed{font-size:12px;font-weight:600;padding:4px 9px;border-radius:8px;border:1px solid rgba(255,255,255,.4);cursor:pointer}
+  .side{flex-shrink:0;padding:12px 14px 16px;border-top:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.35)}
+  .side h4{font-size:11px;color:var(--text-secondary);letter-spacing:1px;margin-bottom:9px}
+  .next-row{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none}
+  .next-row::-webkit-scrollbar{display:none}
+  .next-card{flex-shrink:0;width:150px;border-radius:11px;overflow:hidden;border:1px solid rgba(255,255,255,.6);cursor:pointer;transition:.2s;background:rgba(245,242,236,.8)}
+  .next-card:active{transform:scale(.95)}
+  .next-cover{aspect-ratio:16/9;background-size:cover;background-position:center}
+  .next-card .n{padding:6px 8px;font-size:11.5px;color:var(--text-primary)}
+  .next-card .n small{display:block;color:var(--text-secondary);font-size:10px;margin-top:2px}
+  .auto-toggle{display:flex;align-items:center;justify-content:space-between;margin-top:11px;font-size:12px;color:var(--text-secondary)}
+  .switch{width:40px;height:23px;border-radius:99px;background:rgba(70,65,59,.18);position:relative;cursor:pointer;transition:.2s;flex-shrink:0}
+  .switch.on{background:linear-gradient(135deg,#C99A8E,#B07D6B)}
+  .switch i{position:absolute;top:2.5px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 4px rgba(70,65,59,.3)}
+  .switch.on i{left:19px}
+
+  /* ===== 底部导航 ===== */
+  .bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:rgba(245,242,236,.72);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border-top:1px solid rgba(255,255,255,.5);display:flex;justify-content:space-around;padding:8px 0 20px;z-index:100}
+  .nav-item{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;color:var(--text-secondary);font-size:10px;min-width:64px;transition:color .15s}
+  .nav-item.active{color:var(--text-primary)}
+  .nav-item svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .nav-item.active svg{stroke:var(--red)}
+  .nav-plus{display:flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:15px;background:linear-gradient(135deg,#C99A8E,#B07D6B);box-shadow:0 6px 16px rgba(176,125,107,.42);transform:translateY(-4px);cursor:pointer;flex-shrink:0}
+  .nav-plus svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:2.4;stroke-linecap:round}
+
+  .toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%) translateY(10px);background:rgba(70,65,59,.92);color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;opacity:0;pointer-events:none;transition:all .25s;z-index:300}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- 顶部 -->
+<div class="topbar">
+  <div class="brand"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M5 4h11l3 3v13H5z"/><path d="M9 9l5 3-5 3z" fill="#fff" stroke="none"/></svg></span>视频</div>
+  <div class="spacer"></div>
+  <button class="pill accent" onclick="document.getElementById('file').click()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>上传</button>
+</div>
+
+<!-- 上传区 -->
+<div class="hero">
+  <h1>我的<span class="grad">视频工坊</span></h1>
+  <p>珍藏的片段都在这里，随时回看、循环播放</p>
+  <div class="dropzone" onclick="document.getElementById('file').click()">
+    <div class="dz-icon"><svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/></svg></div>
+    <div><b>点击选择视频</b><span>支持 MP4 / MOV / WebM</span></div>
+  </div>
+  <div class="upload-meta">
+    <label>标签<input id="tagInput" type="text" placeholder="如 旅行,生日"></label>
+    <label>拍摄时间<input id="shootInput" type="date"></label>
+  </div>
+  <div class="upload-row" id="uploadRow"></div>
+  <input type="file" id="file" accept="video/*" multiple hidden onchange="simUpload(event)">
+</div>
+
+<!-- 筛选 + 视频墙 -->
+<div class="sec-head">
+  <h2>作品墙</h2>
+  <div class="chips" id="chips">
+    <span class="chip on" data-f="全部">全部</span>
+    <span class="chip" data-f="我上传的">我上传的</span>
+    <span class="chip" data-f="成长精选">成长精选</span>
+    <span class="chip" data-f="最近">最近</span>
+  </div>
+</div>
+<div class="grid" id="grid"></div>
+
+<!-- 底部导航 -->
+<div class="bottom-nav">
+  <div class="nav-item"><span id="nav-home"></span><span>首页</span></div>
+  <div class="nav-item"><span id="nav-year"></span><span>流年</span></div>
+  <div class="nav-plus" onclick="showToast('发布（原型占位）')"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+  <div class="nav-item"><span id="nav-place"></span><span>方隅</span></div>
+  <div class="nav-item active"><span id="nav-video"></span><span>视频</span></div>
+</div>
+
+<!-- 沉浸播放器（米色毛玻璃弹层） -->
+<div class="player" id="player">
+  <div class="player-top">
+    <button class="pill" onclick="closePlayer()"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>返回</button>
+    <div class="title" id="pTitle"></div>
+    <button class="pill" onclick="closePlayer()">✕</button>
+  </div>
+  <div class="stage">
+    <div class="screen" id="screen">
+      <div class="pgrad" id="pGrad"></div>
+      <div class="bigplay" id="bigPlay" onclick="togglePlay()"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+      <div class="pbar">
+        <div class="track" id="track" onclick="seek(event)"><i id="fill"></i></div>
+        <div class="ctrls">
+          <button id="playBtn" onclick="togglePlay()"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+          <span class="t" id="cur">0:00</span><span class="t">/</span><span class="t" id="dur">0:00</span>
+          <div class="spacer"></div>
+          <span class="speed" onclick="cycleSpeed()">1.0x</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="side">
+    <h4>接下来播放</h4>
+    <div class="next-row" id="nextList"></div>
+    <div class="auto-toggle">自动播放下一个
+      <div class="switch on" id="autoSw" onclick="this.classList.toggle('on')"><i></i></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const ICON={
+  home:'<svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
+  year:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>',
+  place:'<svg viewBox="0 0 24 24"><path d="M12 22s7-7.5 7-13a7 7 0 10-14 0c0 5.5 7 13 7 13z"/><circle cx="12" cy="9" r="2.5"/></svg>',
+  video:'<svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg>',
+};
+document.getElementById('nav-home').innerHTML=ICON.home;
+document.getElementById('nav-year').innerHTML=ICON.year;
+document.getElementById('nav-place').innerHTML=ICON.place;
+document.getElementById('nav-video').innerHTML=ICON.video;
+
+const palettes=[['#E8C9B8','#C99A8E'],['#B8D8C4','#8FA982'],['#F2D9A8','#D9A66A'],
+  ['#C9A9D8','#A88FB8'],['#F0B9A8','#C08368'],['#A8C8D8','#7E9AA8'],['#E5B8C8','#C08BA0'],['#D8C8A8','#B8A06A']];
+const cover=g=>'linear-gradient(135deg,'+g[0]+','+g[1]+')';
+const fmt=s=>{s=Math.max(0,Math.floor(s||0));const m=Math.floor(s/60),x=s%60;return m+':'+String(x).padStart(2,'0')};
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const el=id=>document.getElementById(id);
+
+/* ===== 模拟数据 ===== */
+let VIDEOS=[
+  {id:'v1',title:'周末徒步的云海',desc:'山顶风很大，但云海太美了',dur:342,who:'我上传的',g:0,tags:['旅行','风景'],upload_time:'2026-05-02 16:20'},
+  {id:'v2',title:'宝宝第一次走路',desc:'摇摇晃晃的小步伐',dur:76,who:'成长精选',g:2,tags:['成长','家庭'],upload_time:'2026-03-18 10:05'},
+  {id:'v3',title:'海边日出延时',desc:'三分钟看完整场日出',dur:180,who:'我上传的',g:5,tags:['旅行','风景'],upload_time:'2026-04-30 05:47'},
+  {id:'v4',title:'生日派对合集',desc:'吹蜡烛、切蛋糕、大合照',dur:268,who:'成长精选',g:6,tags:['生日','聚会'],upload_time:'2026-02-14 19:30'},
+  {id:'v5',title:'雪地打滚的柴犬',desc:'第一次见雪的开心',dur:45,who:'我上传的',g:1,tags:['宠物','冬日'],upload_time:'2026-01-12 14:12'},
+  {id:'v6',title:'幼儿园文艺汇演',desc:'台上的小大人',dur:521,who:'成长精选',g:3,tags:['成长','校园'],upload_time:'2025-12-28 09:40'},
+  {id:'v7',title:'夜市烟火气',desc:'人挤人的快乐',dur:95,who:'我上传的',g:4,tags:['美食','城市'],upload_time:'2025-11-03 21:15'},
+  {id:'v8',title:'第一次游泳课',desc:'敢把头埋进水里啦',dur:133,who:'成长精选',g:7,tags:['成长','夏天'],upload_time:'2025-08-16 15:55'},
+];
+let viewList=[], activeFilter='全部', cur=-1, playing=false, speed=1, si=0;
+const SPEEDS=[1,1.25,1.5,2,0.75];
+let playTimer=null, curT=0;
+
+function applyFilter(){
+  if(activeFilter==='我上传的') viewList=VIDEOS.filter(v=>v.who==='我上传的');
+  else if(activeFilter==='成长精选') viewList=VIDEOS.filter(v=>v.who==='成长精选');
+  else if(activeFilter==='最近') viewList=[...VIDEOS].sort((a,b)=>(b.upload_time||'').localeCompare(a.upload_time||''));
+  else viewList=VIDEOS;
+  renderGrid();
+}
+function renderGrid(){
+  const grid=el('grid');
+  if(!viewList.length){ grid.innerHTML='<div class="empty">还没有视频，点上方「上传」试试 ✨</div>'; return; }
+  grid.innerHTML=viewList.map((v,i)=>`
+    <div class="vcard" onclick="openPlayer(${i})">
+      <div class="vcover" style="background:${cover(palettes[v.g%8])}"></div>
+      <div class="vtype ${v.who==='我上传的'?'':'made'}">${v.who}</div>
+      <div class="playring"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+      <div class="dur">${fmt(v.dur)}</div>
+      <div class="meta"><h3>${esc(v.title)}</h3><p>${esc(v.desc)}</p></div>
+    </div>`).join('');
+}
+el('chips').addEventListener('click',e=>{
+  const c=e.target.closest('.chip'); if(!c) return;
+  document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
+  c.classList.add('on');
+  activeFilter=c.dataset.f; applyFilter();
+});
+
+/* ===== 上传（模拟进度） ===== */
+function simUpload(e){
+  const files=e.target.files; if(!files||!files.length)return;
+  [...files].forEach(uploadFile); e.target.value='';
+}
+function uploadFile(file){
+  const tags=el('tagInput').value, shoot=el('shootInput').value;
+  const card=document.createElement('div'); card.className='up-card';
+  card.innerHTML=`<div class="up-thumb"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3z"/></svg></div>
+    <div class="up-main"><div class="up-name">${esc(file.name)}</div><div class="up-sub">上传中…</div><div class="bar"><i></i></div></div><div class="up-pct">0%</div>`;
+  el('uploadRow').appendChild(card);
+  const bar=card.querySelector('.bar>i'), pct=card.querySelector('.up-pct'), sub=card.querySelector('.up-sub');
+  let p=0;
+  const timer=setInterval(()=>{
+    p+=Math.floor(4+Math.random()*12); if(p>=100)p=100;
+    bar.style.width=p+'%'; pct.textContent=p+'%';
+    if(p===100){
+      clearInterval(timer);
+      sub.innerHTML='<span class="up-done">✓ 已完成</span>'; pct.innerHTML='<span class="up-done">完成</span>';
+      VIDEOS.unshift({id:'u'+Date.now(),title:file.name.replace(/\.[^.]+$/,'')||'新视频',desc:tags||'刚刚上传',dur:Math.floor(30+Math.random()*300),who:'我上传的',g:Math.floor(Math.random()*8),tags:tags?tags.split(/[,，]/):[],upload_time:new Date().toISOString().slice(0,16).replace('T',' ')});
+      applyFilter(); showToast('上传成功，已加入作品墙');
+    }
+  },120);
+}
+
+/* ===== 沉浸播放器（模拟播放进度） ===== */
+const playIcon='<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+const pauseIcon='<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
+function openPlayer(i){
+  cur=i; const v=viewList[i]; if(!v) return;
+  el('pTitle').textContent=v.title;
+  el('pGrad').style.background=cover(palettes[v.g%8]);
+  const rest=viewList.filter((_,k)=>k!==i);
+  el('nextList').innerHTML=rest.slice(0,6).map(n=>`
+    <div class="next-card" onclick="openPlayer(${viewList.indexOf(n)})">
+      <div class="next-cover" style="background:${cover(palettes[n.g%8])}"></div>
+      <div class="n">${esc(n.title)}<small>${fmt(n.dur)} · ${n.who}</small></div></div>`).join('');
+  el('player').classList.add('show');
+  curT=0; playing=false; el('playBtn').innerHTML=playIcon; el('bigPlay').style.display='grid';
+  el('dur').textContent=fmt(v.dur); updateBar();
+}
+function closePlayer(){ stopTick(); el('player').classList.remove('show'); playing=false; }
+function togglePlay(){
+  if(playing){ playing=false; stopTick(); el('playBtn').innerHTML=playIcon; el('bigPlay').style.display='grid'; }
+  else{ playing=true; el('playBtn').innerHTML=pauseIcon; el('bigPlay').style.display='none'; tick(); }
+}
+function tick(){
+  stopTick();
+  playTimer=setInterval(()=>{
+    const v=viewList[cur]; if(!v) return;
+    curT+=0.1;
+    if(curT>=v.dur){
+      stopTick(); playing=false; el('playBtn').innerHTML=playIcon; el('bigPlay').style.display='grid';
+      curT=v.dur; updateBar();
+      if(el('autoSw').classList.contains('on')){ setTimeout(()=>openPlayer((cur+1)%viewList.length),600); }
+      return;
+    }
+    updateBar();
+  },100);
+}
+function stopTick(){ if(playTimer){ clearInterval(playTimer); playTimer=null; } }
+function updateBar(){
+  const v=viewList[cur]; if(!v) return;
+  el('fill').style.width=(curT/v.dur*100)+'%';
+  el('cur').textContent=fmt(curT);
+}
+function seek(e){
+  const v=viewList[cur]; if(!v) return;
+  const r=e.currentTarget.getBoundingClientRect();
+  curT=(e.clientX-r.left)/r.width*v.dur;
+  updateBar();
+}
+function cycleSpeed(){ si=(si+1)%SPEEDS.length; speed=SPEEDS[si]; document.querySelector('.speed').textContent=speed+'x'; }
+
+function showToast(msg){ const t=el('toast'); t.textContent=msg; t.className='toast show'; clearTimeout(t._t); t._t=setTimeout(()=>t.className='toast',1600); }
+
+applyFilter();
+</script>
+</body>
+</html>

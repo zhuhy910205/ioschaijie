@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>视频 · 柴杰相册（整屏 Feed）</title>
+<style>
+  :root{
+    --bg:#E9E5DE; --card:#F5F2EC; --text-primary:#46413B; --text-secondary:#968D83;
+    --accent:#A88F79; --accent-light:#EAE1D8; --red:#B07D6B;
+    --border:#E0DAD1;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{font-family:-apple-system,'PingFang SC','Helvetica Neue',sans-serif;color:var(--text-primary);
+    max-width:480px;margin:0 auto;height:100dvh;overflow:hidden;position:relative;
+    display:flex;flex-direction:column;background:#111}
+
+  /* ===== 顶部 ===== */
+  .topbar{position:relative;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:12px 14px 8px;z-index:50;
+    -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+    background:linear-gradient(180deg,rgba(245,242,236,.9),rgba(245,242,236,.5));border-bottom:1px solid rgba(255,255,255,.5)}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:2px;flex-shrink:0}
+  .brand .logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#C99A8E,#B07D6B);display:grid;place-items:center;box-shadow:0 6px 16px rgba(176,125,107,.4)}
+  .brand .logo svg{width:16px;height:16px}
+  .topbar .spacer{flex:1}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.6);
+    border:1px solid rgba(255,255,255,.7);color:var(--text-primary);font-size:13px;cursor:pointer;transition:.2s;white-space:nowrap}
+  .pill:active{transform:scale(.94)}
+  .pill.accent{background:linear-gradient(135deg,#C99A8E,#B07D6B);border:none;color:#fff;font-weight:600;box-shadow:0 6px 16px rgba(176,125,107,.35)}
+  .pill svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ===== 频道筛选（三按钮分段控制器，顶部栏居中） ===== */
+  .seg{position:absolute;left:50%;transform:translateX(-50%);display:flex;background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.65);border-radius:999px;padding:3px;gap:2px;box-shadow:inset 0 1px 3px rgba(70,65,59,.06)}
+  .seg-btn{padding:6px 11px;border-radius:999px;font-size:11.5px;color:var(--text-secondary);cursor:pointer;transition:.2s;white-space:nowrap;font-weight:500;line-height:1}
+  .seg-btn:active{transform:scale(.94)}
+  .seg-btn.on{background:linear-gradient(135deg,#C99A8E,#B07D6B);color:#fff;font-weight:600;box-shadow:0 2px 6px rgba(176,125,107,.3)}
+
+  /* ===== 整屏 Feed（虚拟滚动） ===== */
+  .feed{flex:1;min-height:0;overflow-y:auto;scroll-snap-type:y mandatory;scroll-snap-stop:always;
+    -webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;scroll-behavior:smooth;background:#111}
+  .feed::-webkit-scrollbar{display:none}
+  .vpad{pointer-events:none}
+  .feed-item{position:relative;height:100%;scroll-snap-align:start;overflow:hidden;background:#000}
+  .f-cover{position:absolute;inset:0;background-size:cover;background-position:center}
+  .f-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:transparent}
+  .f-vignette{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.28));pointer-events:none}
+  .f-type{position:absolute;top:14px;left:14px;z-index:3;font-size:11px;font-weight:600;padding:4px 9px;border-radius:8px;background:rgba(245,242,236,.85);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);color:var(--accent)}
+  .f-type.made{color:var(--red)}
+  .f-top-right{position:absolute;top:14px;right:14px;z-index:3;display:flex;align-items:center;gap:8px}
+  .f-dur{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:8px;background:rgba(0,0,0,.55);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);color:#fff}
+  .f-vol{font-size:13px;padding:3px 7px;border-radius:8px;background:rgba(0,0,0,.55);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);cursor:pointer;line-height:1}
+  .f-meta{position:absolute;left:0;right:0;bottom:0;z-index:3;padding:26px 16px 22px;background:linear-gradient(transparent 35%,rgba(0,0,0,.72));pointer-events:none}
+  .f-meta h3{font-size:17px;font-weight:700;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.7)}
+  .f-meta p{margin-top:4px;font-size:13px;line-height:1.45;color:#ECE8F7;text-shadow:0 1px 6px rgba(0,0,0,.7);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;word-break:break-word}
+  .f-tags{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+  .f-tags span{font-size:10.5px;padding:3px 8px;border-radius:99px;background:rgba(255,255,255,.22);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:#fff;border:1px solid rgba(255,255,255,.3)}
+  .f-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(1);z-index:4;width:62px;height:62px;border-radius:50%;
+    background:rgba(255,255,255,.2);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.5);
+    display:grid;place-items:center;transition:all .35s;box-shadow:0 8px 24px rgba(0,0,0,.35);pointer-events:none}
+  .f-play svg{width:26px;height:26px;fill:#fff;margin-left:3px}
+  .feed-item.active .f-play{opacity:0;transform:translate(-50%,-50%) scale(1.4)}
+  .f-progress{position:absolute;left:0;right:0;bottom:0;z-index:5;height:3px;background:rgba(255,255,255,.25)}
+  .f-progress>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#C99A8E,#B07D6B)}
+  .f-hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:12px;opacity:0;pointer-events:none;z-index:6;text-align:center;transition:opacity .3s;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+  .f-hint.show{opacity:.85}
+  .empty-state{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--text-secondary);background:linear-gradient(160deg,#EFEAE2,#E3DDD3);font-size:13px}
+
+  /* ===== 底部导航 ===== */
+  .bottom-nav{flex-shrink:0;display:flex;justify-content:space-around;padding:8px 0 20px;z-index:60;
+    background:rgba(245,242,236,.82);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border-top:1px solid rgba(255,255,255,.5)}
+  .nav-item{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;color:var(--text-secondary);font-size:10px;min-width:64px;transition:color .15s}
+  .nav-item.active{color:var(--text-primary)}
+  .nav-item svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .nav-item.active svg{stroke:var(--red)}
+  .nav-plus{display:flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:15px;background:linear-gradient(135deg,#C99A8E,#B07D6B);box-shadow:0 6px 16px rgba(176,125,107,.42);transform:translateY(-4px);cursor:pointer;flex-shrink:0}
+  .nav-plus svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:2.4;stroke-linecap:round}
+
+  /* ===== 上传 Sheet ===== */
+  .sheet-overlay{display:none;position:fixed;inset:0;z-index:120;background:rgba(70,65,59,.4);align-items:flex-end;justify-content:center}
+  .sheet-overlay.show{display:flex}
+  .sheet{width:100%;max-width:480px;background:rgba(245,242,236,.92);-webkit-backdrop-filter:blur(22px);backdrop-filter:blur(22px);border:1px solid rgba(255,255,255,.6);border-radius:20px 20px 0 0;padding:18px 18px 26px;animation:slideUp .28s ease-out}
+  @keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+  .sheet-handle{width:36px;height:4px;background:#DDD;border-radius:2px;margin:0 auto 16px}
+  .sheet-title{font-size:17px;font-weight:700;margin-bottom:14px}
+  .sheet-label{font-size:12px;color:var(--text-secondary);margin:12px 0 6px}
+  .sheet input{width:100%;background:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.7);border-radius:10px;padding:9px 11px;color:var(--text-primary);font-size:13px}
+  .sheet input::placeholder{color:#B0A698}
+  .file-row{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:11px;background:rgba(255,255,255,.5);border:1px dashed rgba(168,143,121,.5);cursor:pointer}
+  .file-row:active{background:var(--accent-light)}
+  .file-row b{font-size:13px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+  .file-row span{font-size:11px;color:var(--accent);flex-shrink:0;font-weight:600}
+  .sheet-bar{height:6px;border-radius:99px;background:rgba(70,65,59,.12);margin-top:10px;overflow:hidden;display:none}
+  .sheet-bar.show{display:block}
+  .sheet-bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#C99A8E,#B07D6B);transition:width .15s}
+  .sheet-actions{display:flex;gap:10px;margin-top:16px}
+  .sbtn{flex:1;padding:11px 0;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;border:1px solid rgba(255,255,255,.6);background:rgba(255,255,255,.5);color:var(--text-primary)}
+  .sbtn.accent{background:linear-gradient(135deg,#C99A8E,#B07D6B);border:none;color:#fff;box-shadow:0 4px 14px rgba(176,125,107,.35)}
+  .sbtn:active{transform:scale(.97)}
+
+  .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(10px);background:rgba(70,65,59,.92);color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;opacity:0;pointer-events:none;transition:all .25s;z-index:300}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- 顶部 -->
+<div class="topbar">
+  <div class="brand"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M5 4h11l3 3v13H5z"/><path d="M9 9l5 3-5 3z" fill="#fff" stroke="none"/></svg></span>视频</div>
+  <div class="seg" id="seg">
+    <span class="seg-btn on" data-f="全部">全部</span>
+    <span class="seg-btn" data-f="我上传的">我上传的</span>
+    <span class="seg-btn" data-f="成长精选">成长精选</span>
+  </div>
+  <div class="spacer"></div>
+  <button class="pill accent" onclick="openSheet()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>上传</button>
+</div>
+
+<!-- 整屏 Feed（虚拟滚动：只渲染当前屏 ±1） -->
+<div class="feed" id="feed"></div>
+
+<!-- 底部导航 -->
+<div class="bottom-nav">
+  <div class="nav-item"><span id="nav-home"></span><span>首页</span></div>
+  <div class="nav-item"><span id="nav-year"></span><span>流年</span></div>
+  <div class="nav-plus" onclick="showToast('发布（原型占位）')"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+  <div class="nav-item"><span id="nav-place"></span><span>方隅</span></div>
+  <div class="nav-item active"><span id="nav-video"></span><span>视频</span></div>
+</div>
+
+<!-- 上传 Sheet -->
+<div class="sheet-overlay" id="sheetOv" onclick="if(event.target===this)closeSheet()">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">上传视频</div>
+    <div class="file-row" onclick="document.getElementById('file').click()">
+      <b id="fileName">点击选择视频（MP4 / MOV / WebM）</b>
+      <span>选择</span>
+    </div>
+    <div class="sheet-label">标签</div>
+    <input id="tagInput" type="text" placeholder="逗号分隔，如 旅行,风景">
+    <div class="sheet-label">拍摄时间</div>
+    <input id="shootInput" type="date">
+    <div class="sheet-bar" id="sheetBar"><i id="sheetBarI"></i></div>
+    <div class="sheet-actions">
+      <button class="sbtn" onclick="closeSheet()">取消</button>
+      <button class="sbtn accent" id="uploadBtn" onclick="startUpload()">上传</button>
+    </div>
+  </div>
+</div>
+<input type="file" id="file" accept="video/*" hidden onchange="onPick(event)">
+<div class="toast" id="toast"></div>
+
+<script>
+const ICON={
+  home:'<svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
+  year:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>',
+  place:'<svg viewBox="0 0 24 24"><path d="M12 22s7-7.5 7-13a7 7 0 10-14 0c0 5.5 7 13 7 13z"/><circle cx="12" cy="9" r="2.5"/></svg>',
+  video:'<svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg>',
+};
+document.getElementById('nav-home').innerHTML=ICON.home;
+document.getElementById('nav-year').innerHTML=ICON.year;
+document.getElementById('nav-place').innerHTML=ICON.place;
+document.getElementById('nav-video').innerHTML=ICON.video;
+
+const palettes=[['#E8C9B8','#C99A8E'],['#B8D8C4','#8FA982'],['#F2D9A8','#D9A66A'],
+  ['#C9A9D8','#A88FB8'],['#F0B9A8','#C08368'],['#A8C8D8','#7E9AA8'],['#E5B8C8','#C08BA0'],['#D8C8A8','#B8A06A']];
+const cover=g=>'linear-gradient(135deg,'+g[0]+','+g[1]+')';
+const fmt=s=>{s=Math.max(0,Math.floor(s||0));const m=Math.floor(s/60),x=s%60;return m+':'+String(x).padStart(2,'0')};
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const el=id=>document.getElementById(id);
+const feed=el('feed');
+/* 公开测试视频源（真实接入时替换为相册实际 URL；加载失败自动回退渐变封面+模拟进度） */
+const DEMO_SRCS=[
+  'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+  'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+  'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+];
+
+let VIDEOS=[
+  {id:'v1',title:'周末徒步的云海',desc:'山顶风很大，但云海太美了，那一刻觉得一切都值得。',dur:342,who:'我上传的',g:0,tags:['旅行','风景'],upload_time:'2026-05-02 16:20'},
+  {id:'v2',title:'宝宝第一次走路',desc:'摇摇晃晃的小步伐，全家人的心都化了。',dur:76,who:'成长精选',g:2,tags:['成长','家庭'],upload_time:'2026-03-18 10:05'},
+  {id:'v3',title:'海边日出延时',desc:'三分钟看完整场日出，海面被染成金色。',dur:180,who:'我上传的',g:5,tags:['旅行','风景'],upload_time:'2026-04-30 05:47'},
+  {id:'v4',title:'生日派对合集',desc:'吹蜡烛、切蛋糕、大合照，热热闹闹一整晚。',dur:268,who:'成长精选',g:6,tags:['生日','聚会'],upload_time:'2026-02-14 19:30'},
+  {id:'v5',title:'雪地打滚的柴犬',desc:'第一次见雪，开心到在雪地里打滚。',dur:45,who:'我上传的',g:1,tags:['宠物','冬日'],upload_time:'2026-01-12 14:12'},
+  {id:'v6',title:'幼儿园文艺汇演',desc:'台上的小大人，认认真真完成每个动作。',dur:521,who:'成长精选',g:3,tags:['成长','校园'],upload_time:'2025-12-28 09:40'},
+  {id:'v7',title:'夜市烟火气',desc:'人挤人的快乐，烤串和糖葫芦都要。',dur:95,who:'我上传的',g:4,tags:['美食','城市'],upload_time:'2025-11-03 21:15'},
+  {id:'v8',title:'第一次游泳课',desc:'敢把头埋进水里啦，进步神速。',dur:133,who:'成长精选',g:7,tags:['成长','夏天'],upload_time:'2025-08-16 15:55'},
+  {id:'v9',title:'秋日银杏大道',desc:'满地的金黄，踩着咯吱响。',dur:210,who:'我上传的',g:3,tags:['风景','秋天'],upload_time:'2025-10-25 15:30'},
+  {id:'v10',title:'学骑自行车',desc:'摔了三次，终于会了。',dur:189,who:'成长精选',g:5,tags:['成长','户外'],upload_time:'2025-09-06 17:10'},
+  {id:'v11',title:'猫咪的迷惑行为',desc:'盯了逗猫棒十分钟。',dur:38,who:'我上传的',g:1,tags:['宠物','搞笑'],upload_time:'2025-08-02 20:45'},
+  {id:'v12',title:'第一次坐火车',desc:'窗外的风景一路后退。',dur:98,who:'成长精选',g:7,tags:['成长','旅行'],upload_time:'2025-06-20 09:15'},
+];
+
+/* ===== 频道筛选（顶部三按钮） ===== */
+let activeFilter='全部', viewList=[];
+function applyFilter(){
+  if(activeFilter==='我上传的') viewList=VIDEOS.filter(v=>v.who==='我上传的');
+  else if(activeFilter==='成长精选') viewList=VIDEOS.filter(v=>v.who==='成长精选');
+  else viewList=VIDEOS;
+  feed.scrollTop=0; renderWindow(0);
+}
+el('seg').addEventListener('click',e=>{
+  const b=e.target.closest('.seg-btn'); if(!b) return;
+  document.querySelectorAll('.seg-btn').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  activeFilter=b.dataset.f; applyFilter();
+});
+
+/* ===== 虚拟滚动：只渲染当前屏 ±1，上下占位撑高 ===== */
+let itemH=0, center=0;
+function measure(){ itemH=feed.clientHeight||1; }
+function itemHTML(v,i,active){
+  return `
+  <div class="feed-item ${active?'active':''}" data-i="${i}">
+    <div class="f-cover" style="background:${cover(palettes[v.g%8])}"></div>
+    <video class="f-video" muted loop playsinline preload="metadata" src="${DEMO_SRCS[(v.g)%3]}" onerror="this.style.display='none'"></video>
+    <div class="f-vignette"></div>
+    <div class="f-type ${v.who==='我上传的'?'':'made'}">${v.who}</div>
+    <div class="f-top-right"><span class="f-dur">${fmt(v.dur)}</span><span class="f-vol">🔇</span></div>
+    <div class="f-meta">
+      <h3>${esc(v.title)}</h3>
+      <p>${esc(v.desc)}</p>
+      <div class="f-tags">${(v.tags||[]).map(t=>`<span>${esc(t)}</span>`).join('')}</div>
+    </div>
+    <div class="f-play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+    <div class="f-progress"><i></i></div>
+    <div class="f-hint">轻点屏幕 开/关声音</div>
+  </div>`;
+}
+function renderWindow(k){
+  center=k;
+  const n=viewList.length;
+  if(!n){ feed.innerHTML='<div class="empty-state">这个频道还没有视频<br>点右上角「上传」试试 ✨</div>'; return; }
+  const start=Math.max(0,k-1), end=Math.min(n-1,k+1);
+  let html=`<div class="vpad" style="height:${start*itemH}px"></div>`;
+  for(let i=start;i<=end;i++) html+=itemHTML(viewList[i], i, i===k);
+  html+=`<div class="vpad" style="height:${(n-1-end)*itemH}px"></div>`;
+  feed.innerHTML=html;
+  bindVideos();
+  clearFbTimers();
+}
+/* 真实视频播放：当前屏静音自动播、离屏暂停；加载失败回退模拟进度 */
+const fbTimers=new Map();
+function clearFbTimers(){ fbTimers.forEach(t=>clearInterval(t)); fbTimers.clear(); }
+function bindVideos(){
+  document.querySelectorAll('.feed-item').forEach(item=>{
+    const vid=item.querySelector('.f-video'), bar=item.querySelector('.f-progress>i');
+    const act=item.classList.contains('active');
+    if(vid) vid.muted=curMuted;
+    if(act){
+      if(vid && vid.src){
+        const p=vid.play();
+        if(p) p.catch(()=>startFb(item,bar));
+      } else startFb(item,bar);
+      if(vid){
+        vid.ontimeupdate=()=>{ if(vid.duration) bar.style.width=(vid.currentTime/vid.duration*100)+'%'; };
+      }
+    } else {
+      if(vid) vid.pause();
+      if(bar) bar.style.width='0';
+    }
+  });
+}
+function startFb(item,bar){
+  if(!bar || fbTimers.has(item)) return;
+  fbTimers.set(item,setInterval(()=>{
+    let p=parseFloat(bar.style.width)||0; p+=0.8; if(p>=100)p=0;
+    bar.style.width=p+'%';
+  },60));
+}
+/* 静音自动播放兜底：进 feed 先静音播，轻点屏幕切换声音 */
+let curMuted=true;
+feed.addEventListener('click',e=>{
+  const item=e.target.closest('.feed-item'); if(!item) return;
+  if(e.target.closest('.f-meta')||e.target.closest('.f-type')||e.target.closest('.f-dur')) return;
+  curMuted=!curMuted;
+  document.querySelectorAll('.f-video').forEach(v=>v.muted=curMuted);
+  document.querySelectorAll('.f-vol').forEach(x=>x.textContent=curMuted?'🔇':'🔊');
+  showHint(item,'🔊 已开声音');
+});
+function showHint(item,msg){
+  const h=item.querySelector('.f-hint');
+  if(!h) return;
+  h.textContent=msg; h.classList.add('show');
+  clearTimeout(h._t); h._t=setTimeout(()=>h.classList.remove('show'),900);
+}
+/* iOS 首次交互后再强制播放当前屏（自动播放限制兜底） */
+feed.addEventListener('touchend',()=>{
+  const act=document.querySelector('.feed-item.active .f-video');
+  if(act && act.paused) act.play().catch(()=>{});
+},{passive:true});
+/* 滚动时定位当前屏并重渲染窗口 */
+feed.addEventListener('scroll',()=>{
+  const k=Math.round(feed.scrollTop/itemH);
+  const n=viewList.length;
+  if(!n) return;
+  const idx=Math.max(0,Math.min(k,n-1));
+  if(idx!==center) renderWindow(idx);
+},{passive:true});
+window.addEventListener('resize',()=>{ measure(); renderWindow(Math.min(center,viewList.length-1)); });
+
+/* ===== 上传 Sheet ===== */
+let pickedFile=null;
+function openSheet(){ el('sheetOv').classList.add('show'); }
+function closeSheet(){ el('sheetOv').classList.remove('show'); pickedFile=null; el('fileName').textContent='点击选择视频（MP4 / MOV / WebM）'; el('sheetBar').className='sheet-bar'; }
+function onPick(e){
+  const f=e.target.files&&e.target.files[0];
+  e.target.value='';
+  if(!f) return;
+  pickedFile=f;
+  el('fileName').textContent=f.name;
+}
+function startUpload(){
+  if(!pickedFile){ showToast('请先选择视频文件'); return; }
+  const tags=el('tagInput').value;
+  const bar=el('sheetBar'); bar.className='sheet-bar show';
+  const bi=el('sheetBarI'); bi.style.width='0';
+  const btn=el('uploadBtn'); btn.disabled=true; btn.style.opacity=.6;
+  let p=0;
+  const timer=setInterval(()=>{
+    p+=Math.floor(5+Math.random()*14); if(p>=100)p=100;
+    bi.style.width=p+'%';
+    if(p===100){
+      clearInterval(timer);
+      VIDEOS.unshift({id:'u'+Date.now(),title:(pickedFile.name.replace(/\.[^.]+$/,'')||'新视频'),desc:tags||'刚刚上传的视频',dur:Math.floor(30+Math.random()*300),who:'我上传的',g:Math.floor(Math.random()*8),tags:tags?tags.split(/[,，]/):[],upload_time:new Date().toISOString().slice(0,16).replace('T',' ')});
+      btn.disabled=false; btn.style.opacity=1;
+      applyFilter(); showToast('上传成功，已置顶展示');
+    }
+  },100);
+}
+
+function showToast(msg){ const t=el('toast'); t.textContent=msg; t.className='toast show'; clearTimeout(t._t); t._t=setTimeout(()=>t.className='toast',1600); }
+
+measure();
+applyFilter();
+</script>
+</body>
+</html>

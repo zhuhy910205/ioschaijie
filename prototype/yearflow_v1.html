@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>流年 · 那年今日 &amp; 时光轴</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#E9E5DE;--card:#F5F2EC;--text-primary:#46413B;--text-secondary:#968D83;
+    --accent:#A88F79;--accent-light:#EAE1D8;--red:#B07D6B;
+    --border:#E0DAD1;
+  }
+  html,body{height:100%}
+  body{font-family:-apple-system,'PingFang SC','Helvetica Neue',sans-serif;background:linear-gradient(160deg,#EFEAE2 0%,#E3DDD3 100%);color:var(--text-primary);max-width:480px;margin:0 auto;min-height:100vh;min-height:100dvh;position:relative;display:flex;flex-direction:column;padding-bottom:86px}
+  /* 说明：高度充足时 flex 铺满一屏不滚动；极端矮屏自动出现滚动条兜底，保证控制条可见 */
+  body::before{content:'';position:fixed;inset:0;z-index:-1;background:
+    radial-gradient(circle at 18% 14%,rgba(168,143,121,.20),transparent 42%),
+    radial-gradient(circle at 86% 10%,rgba(176,125,107,.16),transparent 44%),
+    radial-gradient(circle at 72% 90%,rgba(201,154,142,.20),transparent 46%)}
+
+  /* ===== Header ===== */
+  .app-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 6px;flex-shrink:0}
+  .h-btn{width:38px;height:38px;border-radius:50%;background:rgba(245,242,236,.65);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-primary);transition:transform .15s}
+  .h-btn:active{transform:scale(.92)}
+  .h-btn svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .h-title{font-size:17px;font-weight:700;letter-spacing:3px}
+
+  /* ===== 那年今日 ===== */
+  .otd-card{margin:6px 14px 0;background:var(--card);border:1px solid rgba(255,255,255,.55);border-radius:18px;overflow:hidden;box-shadow:0 6px 22px rgba(70,65,59,.12);flex-shrink:0}
+  .otd-img-wrap{position:relative;height:min(28dvh,235px)}
+  .otd-img{width:100%;height:100%;object-fit:cover;display:block}
+  .otd-tag{position:absolute;top:12px;left:12px;background:rgba(70,65,59,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fff;font-size:12px;font-weight:600;padding:6px 12px;border-radius:15px;letter-spacing:.5px}
+  .otd-back{position:absolute;top:12px;right:12px;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:var(--text-primary);font-size:12px;font-weight:600;padding:7px 12px;border-radius:15px;border:none;cursor:pointer;display:flex;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,.08);transition:transform .15s}
+  .otd-back:active{transform:scale(.94)}
+  .otd-back svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .otd-body{padding:9px 14px 10px}
+  .otd-title{font-size:15px;font-weight:700;line-height:1.35}
+  .otd-meta{margin-top:3px;font-size:12.5px;color:var(--text-secondary)}
+
+  /* ===== 时光轴 ===== */
+  .tl-section{flex:1;min-height:0;margin:10px 14px 0;background:rgba(245,242,236,.6);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.5);border-radius:18px;padding:10px 12px 8px;box-shadow:0 6px 22px rgba(70,65,59,.10);display:flex;flex-direction:column}
+  .tl-head{display:flex;align-items:baseline;gap:8px;flex-shrink:0}
+  .tl-head h2{font-size:16px;font-weight:700}
+  .tl-chips{display:flex;gap:8px;margin-top:8px;overflow-x:auto;scrollbar-width:none;flex-shrink:0}
+  .tl-chips::-webkit-scrollbar{display:none}
+  .chip{flex-shrink:0;padding:5px 14px;border-radius:14px;font-size:12px;font-weight:600;color:var(--text-secondary);background:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.6);cursor:pointer;transition:all .15s}
+  .chip:active{transform:scale(.95)}
+  .chip.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 2px 8px rgba(168,143,121,.35)}
+  .tl-stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;position:relative;margin-top:4px;padding-top:40px}
+  .ring-wrap{position:relative;flex:none}
+  .ring-wrap svg{width:100%;height:100%;display:block}
+  .dot{cursor:pointer;transform-box:fill-box;transform-origin:center}
+  .dot.hot{animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+  .tl-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:52%;aspect-ratio:1/1;border-radius:50%;overflow:hidden;border:3px solid rgba(255,255,255,.9);box-shadow:0 8px 24px rgba(70,65,59,.3);background:#EDEDED}
+  .tl-center img{width:100%;height:100%;object-fit:cover;display:block}
+  .tl-center img.fade{animation:crossfade .5s ease}
+  @keyframes crossfade{from{opacity:.35;transform:scale(1.08)}to{opacity:1;transform:scale(1)}}
+  .tl-center-date{position:absolute;left:50%;bottom:5px;transform:translateX(-50%);background:rgba(70,65,59,.6);color:#fff;font-size:10px;padding:3px 9px;border-radius:9px;white-space:nowrap}
+
+  /* ===== 季节特效层（春雨 / 夏阳 / 秋枫 / 冬雪） ===== */
+  .fx-layer{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:5;border-radius:50%}
+  .fx{position:absolute;display:block;pointer-events:none}
+  .fx-rain{left:0;top:-15%;width:2px;border-radius:2px;background:linear-gradient(to bottom,rgba(126,154,168,0),rgba(126,154,168,.7));animation:fxRain linear infinite}
+  @keyframes fxRain{from{top:-15%}to{top:110%}}
+  .fx-leaf{top:-8%;animation:fxLeaf linear infinite;text-shadow:0 2px 4px rgba(176,125,107,.25)}
+  @keyframes fxLeaf{
+    0%{top:-8%;transform:translateX(0) rotate(0deg)}
+    25%{top:20%;transform:translateX(-16px) rotate(25deg)}
+    50%{top:50%;transform:translateX(12px) rotate(60deg)}
+    75%{top:78%;transform:translateX(-14px) rotate(100deg)}
+    100%{top:110%;transform:translateX(10px) rotate(150deg)}
+  }
+  .fx-snow{top:-6%;animation:fxSnow linear infinite;opacity:.92}
+  @keyframes fxSnow{
+    0%{top:-6%;transform:translateX(0) rotate(0deg)}
+    25%{top:24%;transform:translateX(10px) rotate(40deg)}
+    50%{top:52%;transform:translateX(-10px) rotate(80deg)}
+    75%{top:80%;transform:translateX(8px) rotate(120deg)}
+    100%{top:110%;transform:translateX(-6px) rotate(160deg)}
+  }
+  .fx-sun-glow{left:50%;top:50%;width:64%;aspect-ratio:1/1;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,rgba(232,190,120,.6),rgba(232,190,120,.22) 46%,rgba(232,190,120,0) 72%);animation:fxGlow 2.8s ease-in-out infinite}
+  @keyframes fxGlow{0%,100%{opacity:.45;transform:translate(-50%,-50%) scale(.9)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.05)}}
+  .fx-sun-spark{width:4px;height:4px;border-radius:50%;background:radial-gradient(circle,#F5DCA8,rgba(217,166,106,0) 70%);animation:fxSpark linear infinite}
+  @keyframes fxSpark{0%{transform:translate(0,0);opacity:0}12%{opacity:.95}100%{transform:translate(var(--sx,0px),-100px);opacity:0}}
+  .fx-tag{position:absolute;top:4px;left:50%;transform:translateX(-50%);background:rgba(70,65,59,.62);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:#fff;font-size:12px;font-weight:600;padding:5px 15px;border-radius:15px;letter-spacing:2px;z-index:8;opacity:0;pointer-events:none;white-space:nowrap}
+  .fx-tag.show{animation:fxTag 2.8s ease forwards}
+  @keyframes fxTag{0%{opacity:0;transform:translateX(-50%) translateY(-8px)}15%{opacity:1;transform:translateX(-50%) translateY(0)}78%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(0)}}
+  .tl-controls{display:flex;align-items:center;justify-content:center;gap:26px;margin-top:4px;flex-shrink:0}
+  .ctl-btn{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.7);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-primary);transition:all .15s}
+  .ctl-btn:active{transform:scale(.9)}
+  .ctl-btn.play{width:48px;height:48px;background:linear-gradient(135deg,#C99A8E,#B07D6B);color:#fff;border:none;box-shadow:0 4px 14px rgba(176,125,107,.4)}
+  .ctl-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .ctl-btn.play svg{width:22px;height:22px}
+  .tl-progress{margin-top:5px;text-align:center;font-size:11.5px;color:var(--text-secondary);flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* ===== Bottom Nav ===== */
+  .bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:rgba(245,242,236,.72);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid rgba(255,255,255,.5);display:flex;justify-content:space-around;padding:8px 0 20px;z-index:100}
+  .nav-item{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;color:var(--text-secondary);font-size:10px;min-width:64px;transition:color .15s}
+  .nav-item.active{color:var(--text-primary)}
+  .nav-item svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .nav-item.active svg{stroke:var(--red)}
+  .nav-plus{display:flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:15px;background:linear-gradient(135deg,#C99A8E,#B07D6B);box-shadow:0 6px 16px rgba(176,125,107,.42);transform:translateY(-4px);cursor:pointer;flex-shrink:0;transition:transform .15s}
+  .nav-plus:active{transform:translateY(-4px) scale(.9)}
+  .nav-plus svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:2.4;stroke-linecap:round}
+
+  .toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%) translateY(10px);background:rgba(70,65,59,.92);color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;opacity:0;pointer-events:none;transition:all .25s;z-index:400}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <button class="h-btn" onclick="showToast('返回（原型占位）')"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+  <div class="h-title">流年</div>
+  <button class="h-btn" onclick="showToast('日历（原型占位）')"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></button>
+</header>
+
+<!-- 那年今日 -->
+<div class="otd-card">
+  <div class="otd-img-wrap">
+    <img class="otd-img" id="otdImg" src="" alt="">
+    <span class="otd-tag" id="otdTag">去年今日</span>
+    <button class="otd-back" onclick="goBackYear()"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 109-9"/><path d="M3 4v5h5"/></svg>再往前</button>
+  </div>
+  <div class="otd-body">
+    <div class="otd-title" id="otdTitle"></div>
+    <div class="otd-meta" id="otdMeta"></div>
+  </div>
+</div>
+
+<!-- 时光轴 -->
+<section class="tl-section">
+  <div class="tl-head">
+    <h2>时光轴</h2>
+  </div>
+  <div class="tl-chips" id="tlChips"></div>
+  <div class="tl-stage" id="tlStage">
+    <div class="ring-wrap" id="ringWrap">
+      <svg viewBox="0 0 360 360" id="ringSvg">
+        <g id="ringInner"></g>
+      </svg>
+      <div class="tl-center">
+        <img id="tlCenterImg" src="" alt="">
+        <div class="tl-center-date" id="tlCenterDate"></div>
+      </div>
+      <div class="fx-layer" id="fxLayer"></div>
+    </div>
+    <div class="fx-tag" id="fxTag"></div>
+  </div>
+  <div class="tl-controls">
+    <button class="ctl-btn" id="prevBtn" aria-label="上一张"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+    <button class="ctl-btn play" id="playBtn" aria-label="播放/暂停"></button>
+    <button class="ctl-btn" id="nextBtn" aria-label="下一张"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+  </div>
+  <div class="tl-progress" id="tlProgress"></div>
+</section>
+
+<div class="bottom-nav">
+  <div class="nav-item"><span id="nav-home"></span><span>首页</span></div>
+  <div class="nav-item active"><span id="nav-year"></span><span>流年</span></div>
+  <div class="nav-plus" onclick="showToast('发帖 / 上传（原型占位）')"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+  <div class="nav-item"><span id="nav-place"></span><span>方隅</span></div>
+  <div class="nav-item"><span id="nav-video"></span><span>视频</span></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const ICON={
+  home:'<svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
+  year:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>',
+  place:'<svg viewBox="0 0 24 24"><path d="M12 22s7-7.5 7-13a7 7 0 10-14 0c0 5.5 7 13 7 13z"/><circle cx="12" cy="9" r="2.5"/></svg>',
+  video:'<svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg>',
+  play:'<svg viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>',
+  pause:'<svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg>',
+};
+document.getElementById('nav-home').innerHTML=ICON.home;
+document.getElementById('nav-year').innerHTML=ICON.year;
+document.getElementById('nav-place').innerHTML=ICON.place;
+document.getElementById('nav-video').innerHTML=ICON.video;
+document.getElementById('playBtn').innerHTML=ICON.pause;
+
+/* ===== 模拟照片数据（真实接入时换成相册库） ===== */
+const PHOTOS=[
+  {id:1, date:'2023-08-06', title:'海边看日落，风很温柔', loc:'青岛金沙滩', scene:'度假·海边'},
+  {id:2, date:'2024-08-06', title:'生日那天吃到了最爱的蛋糕', loc:'家中', scene:'聚餐·生日'},
+  {id:3, date:'2025-08-06', title:'西湖边散步，微风正好', loc:'西湖公园', scene:'户外·散步'},
+  {id:4, date:'2025-03-12', title:'樱花大道开满了花', loc:'玉渊潭公园', scene:'户外·赏花'},
+  {id:5, date:'2025-07-20', title:'第一次露营，星空超美', loc:'郊外营地', scene:'户外·露营'},
+  {id:6, date:'2025-10-01', title:'国庆自驾游出发啦', loc:'高速服务区', scene:'旅行·出发'},
+  {id:7, date:'2025-12-25', title:'圣诞树下的许愿', loc:'商场中庭', scene:'节日·圣诞'},
+  {id:8, date:'2026-01-15', title:'初雪，堆了个小雪人', loc:'小区楼下', scene:'冬日·雪景'},
+  {id:9, date:'2026-02-14', title:'情人节的花和晚餐', loc:'西餐厅', scene:'约会·节日'},
+  {id:10,date:'2026-04-05', title:'清明踏青，油菜花田', loc:'城郊乡野', scene:'户外·踏青'},
+  {id:11,date:'2026-05-01', title:'五一出游，人山人海', loc:'古城老街', scene:'旅行·假期'},
+  {id:12,date:'2026-06-18', title:'毕业照，青春不散场', loc:'校园', scene:'校园·毕业'},
+  {id:13,date:'2026-07-07', title:'泳池里的夏天', loc:'水上乐园', scene:'夏日·玩水'},
+  {id:14,date:'2024-11-11', title:'双十一的战利品', loc:'家中', scene:'购物·拆箱'},
+  {id:15,date:'2024-09-10', title:'教师节回学校看老师', loc:'母校', scene:'校园·重聚'},
+  {id:16,date:'2024-05-20', title:'520 的玫瑰花', loc:'公司楼下', scene:'节日·花束'},
+  {id:17,date:'2023-12-31', title:'跨年烟花倒计时', loc:'江边', scene:'节日·跨年'},
+  {id:18,date:'2023-04-01', title:'春游放风筝', loc:'公园草坪', scene:'户外·春游'},
+  {id:19,date:'2022-10-05', title:'川西徒步，雪山近在眼前', loc:'四姑娘山', scene:'户外·徒步'},
+  {id:20,date:'2022-06-01', title:'儿童节回老家', loc:'老家', scene:'家乡·节日'},
+].map(p=>({...p, url:`https://picsum.photos/seed/flow${p.id}/500/400`}));
+
+const today=new Date();
+const MD=String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+const el=id=>document.getElementById(id);
+
+/* ===== 那年今日 ===== */
+let otdYear=today.getFullYear()-1;
+
+function findOTD(forceYear){
+  const hits=PHOTOS.filter(p=>p.date.slice(5)===MD && parseInt(p.date.slice(0,4),10)===forceYear);
+  if(hits.length){ otdYear=forceYear; renderOTD(hits[Math.floor(Math.random()*hits.length)], forceYear, false); }
+  else if(forceYear>today.getFullYear()-5){ findOTD(forceYear-1); }
+  else{
+    otdYear=today.getFullYear()-5;                       // 标记已到边界
+    const r=PHOTOS[Math.floor(Math.random()*PHOTOS.length)];
+    renderOTD(r, parseInt(r.date.slice(0,4),10), true);
+    showToast('往年今日没有照片，随机挑了一张');
+  }
+}
+function renderOTD(p, year, random){
+  el('otdImg').src=p.url;
+  el('otdTag').textContent=random ? '今日无旧照 · 随机回忆'
+    : year===today.getFullYear()-1 ? `去年今日 · ${MD}` : `${today.getFullYear()-year} 年前的今天`;
+  el('otdTitle').textContent=p.title;
+  el('otdMeta').textContent=`${year}年${parseInt(p.date.slice(5,7),10)}月${parseInt(p.date.slice(8,10),10)}日 · ${p.loc}`;
+}
+function goBackYear(){
+  if(otdYear<=today.getFullYear()-5){ showToast('已是最早可回溯的年份'); return; }
+  findOTD(otdYear-1);
+}
+
+/* ===== 时光轴（圆形，自适应屏幕尺寸） ===== */
+const CX=180,CY=180;
+let yearFilter='all', playIdx=0, playing=true, timer=null;
+
+function sortedPhotos(){
+  let arr=[...PHOTOS];
+  if(yearFilter!=='all') arr=arr.filter(p=>p.date.slice(0,4)===yearFilter);
+  return arr.sort((a,b)=>a.date.localeCompare(b.date));
+}
+function renderChips(){
+  const years=[...new Set(PHOTOS.map(p=>p.date.slice(0,4)))].sort().reverse();
+  el('tlChips').innerHTML='<span class="chip active" data-y="all">全部</span>'+
+    years.map(y=>`<span class="chip" data-y="${y}">${y}</span>`).join('');
+}
+function renderRing(){
+  const list=sortedPhotos(), n=list.length;
+  const curM=list[playIdx]?parseInt(list[playIdx].date.slice(5,7),10):0;
+  // 四季色：春绿 / 夏杏 / 秋赭 / 冬雾蓝（米色底上的柔和暖调）
+  const seasonOf=m=>m>=3&&m<=5?'#7FA37E':m>=6&&m<=8?'#D9A66A':m>=9&&m<=11?'#C08368':'#7E9AA8';
+  let bg='';
+  bg+=`<circle cx="${CX}" cy="${CY}" r="156" fill="none" stroke="rgba(150,141,131,.25)" stroke-width="1"/>`;
+  bg+=`<circle cx="${CX}" cy="${CY}" r="128" fill="none" stroke="rgba(168,143,121,.18)" stroke-width="1" stroke-dasharray="2 6"/>`;
+  for(let m=1;m<=12;m++){
+    const aDeg=(m-1)/12*360-90, a=aDeg*Math.PI/180;
+    const q=m%3===0;                                   // 3/6/9/12 季度节点，刻度加长加粗
+    const r1=q?140:143, r2=q?152:151;
+    const x1=CX+r1*Math.cos(a), y1=CY+r1*Math.sin(a);
+    const x2=CX+r2*Math.cos(a), y2=CY+r2*Math.sin(a);
+    const xl=CX+163*Math.cos(a), yl=CY+163*Math.sin(a);
+    const sc=seasonOf(m);
+    const hot=m===curM;                                // 当前播放照片所在月份高亮
+    bg+=`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${sc}" stroke-opacity=".55" stroke-width="${q?2.2:1.4}" stroke-linecap="round"/>`;
+    bg+=`<text x="${xl.toFixed(1)}" y="${yl.toFixed(1)}" font-size="${hot?11.5:10}" font-weight="${hot?700:400}" fill="${hot?'#B07D6B':sc}" text-anchor="middle" dominant-baseline="central" transform="rotate(${aDeg.toFixed(1)} ${xl.toFixed(1)} ${yl.toFixed(1)})">${m}月</text>`;
+  }
+  let dots='';
+  list.forEach((p,i)=>{
+    const rad=i/n*360-90, a=rad*Math.PI/180;
+    const x=CX+118*Math.cos(a), y=CY+118*Math.sin(a);
+    const hot=i===playIdx;
+    const r=hot?9:(n>20?5:7);
+    dots+=`<circle class="dot${hot?' hot':''}" data-idx="${i}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="${hot?'#B07D6B':'#C99A8E'}" fill-opacity="${hot?1:.8}" stroke="#fff" stroke-width="${hot?2.5:1.5}"/>`;
+  });
+  el('ringInner').innerHTML=bg+dots;
+}
+function showPhoto(){
+  const list=sortedPhotos();
+  if(!list.length){ el('tlCenterImg').src=''; el('tlCenterDate').textContent=''; el('tlProgress').textContent=''; renderRing(); return; }
+  if(playIdx>list.length-1) playIdx=list.length-1;
+  const p=list[playIdx];
+  const img=el('tlCenterImg');
+  img.src=p.url;
+  img.classList.remove('fade'); void img.offsetWidth; img.classList.add('fade');
+  el('tlCenterDate').textContent=p.date;
+  el('tlProgress').textContent=`${playIdx+1} / ${list.length} · ${p.title}`;
+  renderRing();
+  // 跨节气边界 → 触发对应季节特效 + 节气名提示（圆盘顶部：月份上方 / 年份下方）
+  const s2=solarOf(p.date);
+  if(s2.idx!==lastSolarIdx){ lastSolarIdx=s2.idx; triggerSeasonFx(seasonOfSolar(s2.idx)); showFxTag(s2.name); }
+}
+
+/* ===== 二十四节气 & 季节特效 ===== */
+const SOLAR=[ // [月, 日, 节气名]，每月两个，近似日期（原型演示够用）
+  [1,5,'小寒'],[1,20,'大寒'],
+  [2,4,'立春'],[2,19,'雨水'],
+  [3,5,'惊蛰'],[3,20,'春分'],
+  [4,5,'清明'],[4,20,'谷雨'],
+  [5,5,'立夏'],[5,21,'小满'],
+  [6,6,'芒种'],[6,21,'夏至'],
+  [7,7,'小暑'],[7,23,'大暑'],
+  [8,7,'立秋'],[8,23,'处暑'],
+  [9,7,'白露'],[9,23,'秋分'],
+  [10,8,'寒露'],[10,23,'霜降'],
+  [11,7,'立冬'],[11,22,'小雪'],
+  [12,7,'大雪'],[12,22,'冬至'],
+];
+function solarOf(dateStr){ // 'YYYY-MM-DD' → {idx:0-23, name}
+  const m=parseInt(dateStr.slice(5,7),10), d=parseInt(dateStr.slice(8,10),10);
+  const a=SOLAR[(m-1)*2], b=SOLAR[(m-1)*2+1];
+  if(d>=b[1]) return {idx:(m-1)*2+1, name:b[2]};
+  if(d>=a[1]) return {idx:(m-1)*2, name:a[2]};
+  const pb=SOLAR[((m+10)%12)*2+1];                       // 上月月中的节气
+  return {idx:((m+10)%12)*2+1, name:pb[2]};
+}
+function seasonOfSolar(idx){ // 传统四季：立春/立夏/立秋/立冬为界
+  if(idx>=2&&idx<=7) return 'spring';
+  if(idx>=8&&idx<=13) return 'summer';
+  if(idx>=14&&idx<=19) return 'autumn';
+  return 'winter';
+}
+let lastSolarIdx=null;
+function showFxTag(name){
+  const t=el('fxTag'); if(!t||!name) return;
+  t.textContent=name;
+  t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
+}
+function triggerSeasonFx(season){
+  const layer=el('fxLayer'); if(!layer) return;
+  layer.innerHTML='';
+  if(season==='spring') rainFx(layer);
+  else if(season==='summer') sunFx(layer);
+  else if(season==='autumn') leafFx(layer);
+  else snowFx(layer);
+  clearTimeout(layer._t);
+  layer._t=setTimeout(()=>{ layer.innerHTML=''; },5600);
+}
+function rainFx(layer){                                   // 春雨：细长雨丝斜落
+  for(let i=0;i<26;i++){
+    const d=document.createElement('i');
+    d.className='fx fx-rain';
+    d.style.left=(Math.random()*100).toFixed(1)+'%';
+    d.style.height=(14+Math.random()*14).toFixed(0)+'px';
+    d.style.transform=`rotate(${(8+Math.random()*10).toFixed(0)}deg)`;
+    d.style.animationDuration=(0.6+Math.random()*0.5).toFixed(2)+'s';
+    d.style.animationDelay=(Math.random()*0.8).toFixed(2)+'s';
+    layer.appendChild(d);
+  }
+}
+function sunFx(layer){                                    // 夏阳：暖金光晕呼吸 + 金色光尘上浮
+  const g=document.createElement('i');
+  g.className='fx fx-sun-glow';
+  layer.appendChild(g);
+  for(let i=0;i<14;i++){
+    const d=document.createElement('i');
+    d.className='fx fx-sun-spark';
+    d.style.left=(8+Math.random()*84).toFixed(1)+'%';
+    d.style.bottom=(2+Math.random()*12).toFixed(1)+'%';
+    d.style.setProperty('--sx',(Math.random()*40-20).toFixed(0)+'px');
+    d.style.animationDuration=(2+Math.random()*1.6).toFixed(2)+'s';
+    d.style.animationDelay=(Math.random()*1.5).toFixed(2)+'s';
+    layer.appendChild(d);
+  }
+}
+function leafFx(layer){                                   // 秋枫：枫叶摇曳飘落
+  const emojis=['🍁','🍂'];
+  for(let i=0;i<16;i++){
+    const d=document.createElement('i');
+    d.className='fx fx-leaf';
+    d.textContent=emojis[i%2];
+    d.style.left=(Math.random()*100).toFixed(1)+'%';
+    d.style.fontSize=(16+Math.random()*12).toFixed(0)+'px';
+    d.style.animationDuration=(2.2+Math.random()*1.8).toFixed(2)+'s';
+    d.style.animationDelay=(Math.random()*1.2).toFixed(2)+'s';
+    layer.appendChild(d);
+  }
+}
+function snowFx(layer){                                   // 冬雪：雪花轻舞飘落
+  for(let i=0;i<30;i++){
+    const d=document.createElement('i');
+    d.className='fx fx-snow';
+    d.textContent='❄';
+    d.style.left=(Math.random()*100).toFixed(1)+'%';
+    d.style.fontSize=(9+Math.random()*9).toFixed(0)+'px';
+    d.style.animationDuration=(2.5+Math.random()*2.5).toFixed(2)+'s';
+    d.style.animationDelay=(Math.random()*1.5).toFixed(2)+'s';
+    layer.appendChild(d);
+  }
+}
+function startAuto(){ stopAuto(); timer=setInterval(()=>{ const n=sortedPhotos().length; if(!n)return; playIdx=(playIdx+1)%n; showPhoto(); },3000); }
+function stopAuto(){ if(timer){ clearInterval(timer); timer=null; } }
+function togglePlay(){
+  playing=!playing;
+  el('playBtn').innerHTML=playing?ICON.pause:ICON.play;
+  playing?startAuto():stopAuto();
+}
+el('playBtn').onclick=togglePlay;
+el('prevBtn').onclick=()=>{ const n=sortedPhotos().length; if(!n)return; playIdx=(playIdx-1+n)%n; showPhoto(); };
+el('nextBtn').onclick=()=>{ const n=sortedPhotos().length; if(!n)return; playIdx=(playIdx+1)%n; showPhoto(); };
+el('ringSvg').addEventListener('click',e=>{
+  const c=e.target.closest('.dot'); if(!c)return;
+  playIdx=+c.dataset.idx; showPhoto();
+});
+el('tlChips').addEventListener('click',e=>{
+  const c=e.target.closest('.chip'); if(!c)return;
+  document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));
+  c.classList.add('active');
+  yearFilter=c.dataset.y; playIdx=0; showPhoto();
+});
+
+/* 圆形严格按「剩余可用宽/高」的较小值伸缩（下限 120px 防极端矮屏塌陷），
+   保证播放控制条和进度条永远在可视区内，不被挤出屏幕 */
+function fitRing(){
+  const stage=el('tlStage'), wrap=el('ringWrap');
+  const s=Math.max(120, Math.min(stage.clientWidth, stage.clientHeight-44)); // 预留顶部节气标签区
+  wrap.style.width=s+'px';
+  wrap.style.height=s+'px';
+}
+window.addEventListener('resize',fitRing);
+window.addEventListener('orientationchange',()=>setTimeout(fitRing,300));
+window.addEventListener('load',fitRing);
+if(window.ResizeObserver) new ResizeObserver(()=>fitRing()).observe(document.body);
+
+/* ===== Toast ===== */
+function showToast(msg){ const t=el('toast'); t.textContent=msg; t.className='toast show'; clearTimeout(t._t); t._t=setTimeout(()=>t.className='toast',1600); }
+
+/* ===== Init ===== */
+findOTD(today.getFullYear()-1);
+renderChips();
+showPhoto();
+startAuto();
+requestAnimationFrame(fitRing);
+</script>
+</body>
+</html>

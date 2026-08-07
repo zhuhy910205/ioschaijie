@@ -1,0 +1,33 @@
+# ===== Gradle / KMP =====
+.gradle/
+build/
+**/build/
+.kotlin/
+local.properties
+*.log
+*.apk
+
+# ===== iOS / Xcode / CocoaPods =====
+iosApp/build/
+iosApp/iosApp.xcworkspace/
+iosApp/Pods/
+iosApp/iosApp.xcodeproj/
+*.xcarchive
+*.ipa
+*.app
+DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# ===== IDE =====
+.idea/
+*.iml
+.vscode/
+
+# ===== macOS =====
+.DS_Store
+
+# ===== 其他 =====
+_cleanup_trash/
+screenshots/
+static_server/

@@ -1,0 +1,143 @@
+name: iOS Build (.ipa)
+
+# 触发方式：
+#  1. 手动触发（推荐）：GitHub 仓库页面 → Actions → iOS Build → Run workflow
+#  2. 推送代码到 main 分支时自动触发
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: '构建类型'
+        type: choice
+        options:
+          - unsigned_ipa   # 未签名 ipa（免费 Apple ID + Sideloadly/AltStore 安装）
+          - archive        # 仅 xcarchive（有付费证书时后续导出）
+        default: unsigned_ipa
+  push:
+    branches: [ main ]
+
+# 关键限制：iOS 编译必须在 macOS 上执行
+jobs:
+  build-ios:
+    runs-on: macos-14
+    timeout-minutes: 90
+    env:
+      # setup-java 会设置 JAVA_HOME，这里仅作为 fallback；DEVELOPER_DIR 由 xcode-select 自动选择
+      DEVELOPER_DIR: /Applications/Xcode_15.4.app/Contents/Developer
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17 (required by Kuikly KMP)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Verify Java
+        run: java -version && echo "JAVA_HOME=$JAVA_HOME"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts') }}
+          restore-keys: ${{ runner.os }}-gradle
+
+      - name: Install XcodeGen (project.yml -> xcodeproj)
+        run: |
+          brew install xcodegen
+          xcodegen --version
+
+      - name: Generate iOS project (xcodegen)
+        working-directory: iosApp
+        run: xcodegen generate
+
+      # ===== 关键步骤：先编译 dummy framework =====
+      # Kuikly shared podspec 的 vendored_frameworks 指向 gradle 编译出的 framework，
+      # 不先生成 stub，pod install 的 linker flags 会不对，运行时 SIGABRT。
+      - name: Generate dummy framework (Kuikly prerequisite)
+        run: ./gradlew :shared:generateDummyFramework --console=plain
+
+      - name: Install CocoaPods deps
+        working-directory: iosApp
+        run: |
+          gem install cocoapods -N 2>/dev/null || true
+          pod install --repo-update
+
+      - name: List workspace
+        working-directory: iosApp
+        run: ls -la
+
+      # ===== 构建（禁用签名，产出未签名 app）=====
+      - name: Build app (unsigned, device)
+        working-directory: iosApp
+        run: |
+          xcodebuild \
+            -workspace iosApp.xcworkspace \
+            -scheme iosApp \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Locate built .app
+        working-directory: iosApp
+        id: app_path
+        run: |
+          APP=$(find build/Build/Products -name "*.app" -maxdepth 2 | head -1)
+          echo "APP_PATH=$APP" >> "$GITHUB_OUTPUT"
+          echo "found: $APP"
+
+      # ===== 打未签名 .ipa（Payload 结构）=====
+      # 免费 Apple ID 无法在 CI 签名；下载后用 Sideloadly/AltStore 免费签名安装（7天有效期）
+      - name: Package unsigned .ipa
+        working-directory: iosApp
+        if: github.event.inputs.build_type != 'archive'
+        run: |
+          APP="${{ steps.app_path.outputs.APP_PATH }}"
+          mkdir -p dist/Payload
+          cp -R "$APP" dist/Payload/
+          cd dist
+          zip -qry ../ChaijieApp-unsigned.ipa Payload
+          cd ..
+          ls -la ChaijieApp-unsigned.ipa
+          echo "IPA_READY=yes" >> "$GITHUB_ENV"
+
+      # ===== 打 .xcarchive（有付费证书后导出用）=====
+      - name: Archive (for future signed export)
+        working-directory: iosApp
+        if: github.event.inputs.build_type == 'archive'
+        run: |
+          xcodebuild \
+            -workspace iosApp.xcworkspace \
+            -scheme iosApp \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/ChaijieApp.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            archive
+
+      # ===== 上传产物 =====
+      - name: Upload unsigned .ipa artifact
+        uses: actions/upload-artifact@v4
+        if: github.event.inputs.build_type != 'archive'
+        with:
+          name: ChaijieApp-unsigned-ipa
+          path: iosApp/ChaijieApp-unsigned.ipa
+          retention-days: 14
+
+      - name: Upload .xcarchive artifact
+        uses: actions/upload-artifact@v4
+        if: github.event.inputs.build_type == 'archive'
+        with:
+          name: ChaijieApp-xcarchive
+          path: iosApp/build/ChaijieApp.xcarchive
+          retention-days: 14

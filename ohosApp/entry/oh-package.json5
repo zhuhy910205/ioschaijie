@@ -1,0 +1,12 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "Kuikly Entry Module",
+  "main": "",
+  "author": "",
+  "license": "",
+  "dependencies": {
+    "@kuikly-open/render": "2.23.2",
+    "libkuikly_entry.so": "file:./src/main/cpp/types/kuikly_entry"
+  }
+}
