@@ -21,9 +21,6 @@ jobs:
   build-ios:
     runs-on: macos-14
     timeout-minutes: 90
-    env:
-      # setup-java 会设置 JAVA_HOME，这里仅作为 fallback；DEVELOPER_DIR 由 xcode-select 自动选择
-      DEVELOPER_DIR: /Applications/Xcode_15.4.app/Contents/Developer
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,6 +37,13 @@ jobs:
             ls -la
             exit 1
           fi
+
+      - name: Show Xcode version (diagnostic)
+        # 重要：xcodegen/pod install 与 xcodebuild 必须用同一个 Xcode 版本，
+        # 否则生成的 .xcodeproj 格式（如 77= Xcode16）与编译版本不匹配会打不开。
+        run: |
+          xcode-select -p
+          xcodebuild -version
 
       - name: Setup JDK 17 (required by Kuikly KMP)
         uses: actions/setup-java@v4
