@@ -28,6 +28,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Ensure gradlew is executable
+        # Windows 提交时 gradlew 可执行位可能丢失，macOS runner 上 ./gradlew 会报 Permission denied。
+        # 永久修复已在仓库中（git update-index --chmod=+x gradlew），这里做兜底。
+        run: |
+          if [ -f ./gradlew ]; then
+            chmod +x ./gradlew
+            ls -la ./gradlew
+          else
+            echo "gradlew not found at repo root; listing repo:"
+            ls -la
+            exit 1
+          fi
+
       - name: Setup JDK 17 (required by Kuikly KMP)
         uses: actions/setup-java@v4
         with:
