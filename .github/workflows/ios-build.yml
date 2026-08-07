@@ -48,7 +48,7 @@ jobs:
           XCODE_APP=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
           echo "选中: $XCODE_APP"
           echo "DEVELOPER_DIR=$XCODE_APP/Contents/Developer" >> "$GITHUB_ENV"
-          xcode-select -s "$XCODE_APP/Contents/Developer"
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
           xcodebuild -version
 
       - name: Setup JDK 17 (required by Kuikly KMP)
