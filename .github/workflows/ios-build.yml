@@ -38,11 +38,17 @@ jobs:
             exit 1
           fi
 
-      - name: Show Xcode version (diagnostic)
-        # 重要：xcodegen/pod install 与 xcodebuild 必须用同一个 Xcode 版本，
-        # 否则生成的 .xcodeproj 格式（如 77= Xcode16）与编译版本不匹配会打不开。
+      - name: Select newest Xcode (match xcodegen/pod format)
+        # 关键：xcodegen 和最新 CocoaPods 会生成 Xcode16 格式(77)的 .xcodeproj，
+        # 必须用相同版本的 Xcode 编译，否则报 "future Xcode project file format (77)"。
+        # runner 上通常有多个 Xcode，这里统一选最新版并让后续步骤全部使用。
         run: |
-          xcode-select -p
+          echo "=== 可用 Xcode ==="
+          ls /Applications/ | grep -i xcode || true
+          XCODE_APP=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          echo "选中: $XCODE_APP"
+          echo "DEVELOPER_DIR=$XCODE_APP/Contents/Developer" >> "$GITHUB_ENV"
+          xcode-select -s "$XCODE_APP/Contents/Developer"
           xcodebuild -version
 
       - name: Setup JDK 17 (required by Kuikly KMP)
@@ -64,23 +70,17 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts') }}
           restore-keys: ${{ runner.os }}-gradle
 
-      - name: Install XcodeGen (project.yml -> xcodeproj)
-        # macos-14 runner 的 brew 有 tap trust 检查（aws/tap 不受信任会导致 brew install 中断）。
-        # 双保险：先 brew（带 HOMEBREW_NO_REQUIRE_TAP_TRUST 兜底），失败则从 GitHub Release 直接下二进制
+      - name: Install XcodeGen 2.38.0 (generates Xcode15-compatible format)
+        # xcodegen 2.42+ 默认生成 Xcode16 格式(77)，若 runner 只有 Xcode15 会打不开。
+        # 固定 2.38.0（Xcode15 时代）生成格式 56，兼容性最广（旧格式新 Xcode 可开）。
+        # 直接从 GitHub Release 下载二进制，避免 brew tap trust 问题。
         run: |
-          export HOMEBREW_NO_REQUIRE_TAP_TRUST=1
-          if brew list xcodegen &>/dev/null; then
-            echo "xcodegen already installed"
-          elif brew install xcodegen 2>&1 | tail -3; then
-            echo "xcodegen installed via brew"
-          else
-            echo "brew install failed, downloading binary from GitHub Releases..."
-            curl -sL -o /tmp/xcodegen.zip \
-              https://github.com/yonaskolb/XcodeGen/releases/download/2.42.0/xcodegen.zip
-            unzip -o /tmp/xcodegen.zip -d /tmp/xcodegen-bin
-            mv /tmp/xcodegen-bin/usr/local/bin/xcodegen /usr/local/bin/xcodegen
-            chmod +x /usr/local/bin/xcodegen
-          fi
+          curl -sL -o /tmp/xcodegen.zip \
+            https://github.com/yonaskolb/XcodeGen/releases/download/2.38.0/xcodegen.zip
+          unzip -o /tmp/xcodegen.zip -d /tmp/xcodegen-bin
+          sudo mkdir -p /usr/local/bin
+          sudo cp /tmp/xcodegen-bin/usr/local/bin/xcodegen /usr/local/bin/xcodegen
+          sudo chmod +x /usr/local/bin/xcodegen
           xcodegen --version
 
       - name: Generate iOS project (xcodegen)
@@ -96,7 +96,11 @@ jobs:
       - name: Install CocoaPods deps
         working-directory: iosApp
         run: |
-          gem install cocoapods -N 2>/dev/null || true
+          # 固定 CocoaPods 1.15.2（Xcode15 时代）：最新版会生成 Xcode16 格式(77) 的
+          # Pods.xcodeproj，与旧 Xcode 不兼容。runner 自带新版则先卸载再装固定版。
+          sudo gem uninstall cocoapods -a -x 2>/dev/null || true
+          sudo gem install cocoapods -v 1.15.2 -N --no-document
+          pod --version
           pod install --repo-update
 
       - name: List workspace
