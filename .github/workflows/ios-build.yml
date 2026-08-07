@@ -45,7 +45,8 @@ jobs:
         run: |
           echo "=== 可用 Xcode ==="
           ls /Applications/ | grep -i xcode || true
-          XCODE_APP=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          # 排除 Xcode.app（软链），只取带版本号的，按版本号取最新（如 Xcode_16.2）
+          XCODE_APP=$(ls -d /Applications/Xcode_1*.app 2>/dev/null | sort -V | tail -1)
           echo "选中: $XCODE_APP"
           echo "DEVELOPER_DIR=$XCODE_APP/Contents/Developer" >> "$GITHUB_ENV"
           sudo xcode-select -s "$XCODE_APP/Contents/Developer"
@@ -78,8 +79,9 @@ jobs:
           curl -sL -o /tmp/xcodegen.zip \
             https://github.com/yonaskolb/XcodeGen/releases/download/2.38.0/xcodegen.zip
           unzip -o /tmp/xcodegen.zip -d /tmp/xcodegen-bin
+          # 2.38.0 zip 结构：xcodegen/bin/xcodegen（不是 usr/local/bin）
           sudo mkdir -p /usr/local/bin
-          sudo cp /tmp/xcodegen-bin/usr/local/bin/xcodegen /usr/local/bin/xcodegen
+          sudo cp /tmp/xcodegen-bin/xcodegen/bin/xcodegen /usr/local/bin/xcodegen
           sudo chmod +x /usr/local/bin/xcodegen
           xcodegen --version
 
