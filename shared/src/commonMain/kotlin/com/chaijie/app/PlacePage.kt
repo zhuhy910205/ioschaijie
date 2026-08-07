@@ -1130,7 +1130,15 @@ internal class PlacePage : ComposeContainer() {
     internal fun fmtGps(lat: Double, lng: Double): String {
         val ns = if (lat >= 0) "N" else "S"
         val ew = if (lng >= 0) "E" else "W"
-        return String.format("%.4f°%s, %.4f°%s", kotlin.math.abs(lat), ns, kotlin.math.abs(lng), ew)
+        return "${fmtFixed4(kotlin.math.abs(lat))}°$ns, ${fmtFixed4(kotlin.math.abs(lng))}°$ew"
+    }
+
+    /** 纯 Kotlin 跨平台：等价于 JVM 的 String.format("%.4f")，四舍五入并固定保留 4 位小数（不足补零）。 */
+    private fun fmtFixed4(v: Double): String {
+        val scaled = kotlin.math.round(v * 10000.0) // Long
+        val whole = scaled / 10000
+        val frac = scaled % 10000
+        return "$whole.${frac.toString().padStart(4, '0')}"
     }
 
     @Composable
