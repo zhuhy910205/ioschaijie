@@ -73,7 +73,7 @@ macos-14 runner（90min 超时）
 
 ---
 
-## 五、已解决的 5 个坑（踩坑记录，新任务别再踩）
+## 五、已解决的坑（踩坑记录，新任务别再踩）
 
 | # | 失败现象 | 根因 | 修复 |
 |---|---|---|---|
@@ -82,15 +82,18 @@ macos-14 runner（90min 超时）
 | 3 | `xcode-select: --switch must be run as root` | xcode-select -s 需 root | 加 `sudo` |
 | 4 | `cp: /tmp/xcodegen-bin/usr/local/bin/xcodegen: No such file` | xcodegen 2.38.0 的 zip 结构是 `xcodegen/bin/xcodegen`（不是 usr/local/bin） | 修正拷贝路径 |
 | 5 | `Multiple commands produce '.../Release-iphoneos/.app'` | xcodegen 2.38 生成 application target 时 PRODUCT_NAME 为空 → .app 空名冲突 | project.yml 显式 `PRODUCT_NAME: iosApp`；xcodeVersion 15.0→16.2 |
-| 6 | `shared:compileKotlinIosArm64` 失败：`PlacePage.kt:1133:23 Unresolved reference 'format'` | commonMain 里用了 JVM-only 的 `String.format("%.4f...")`，Kotlin/Native 无此 API | 用纯 Kotlin 实现 `fmtFixed4()`（`kotlin.math.round` + `padStart` 补零）替换；全项目仅此一处，已修（commit 待推） |
+| 6 | `shared:compileKotlinIosArm64` 失败：`PlacePage.kt:1133:23 Unresolved reference 'format'` | commonMain 里用了 JVM-only 的 `String.format("%.4f...")`，Kotlin/Native 无此 API | 用纯 Kotlin 实现 `fmtFixed4()`（`kotlin.math.round` + `padStart` 补零）替换（commit f13d7d1） |
+| 7 | xcodebuild exit 65：`KRBridgeModule.m:11:13 cannot synthesize weak property in file using manual reference counting` | 工程没开 ARC，而 Kuikly 协议（KRBaseModule.h）声明了 `weak` 属性（`hr_rootView`），MRC 下无法 synthesize | **project.yml** target settings 加 `CLANG_ENABLE_OBJC_ARC: YES`（整 target 开 ARC；所有 .m 无手动 retain/release，安全）。⚠️ 工程用 xcodegen，改 project.yml 而非 pbxproj（会被重新生成覆盖）（commit 88faeab） |
 
-**当前状态**：1~5 关全过 + 第 6 关（shared Kotlin/Native 编译）根因已定位并修复：`PlacePage.kt` 的 `fmtGps()` 用了 `String.format`（JVM-only），已替换为跨平台私有函数 `fmtFixed4()`（已验证与 `%.4f` 输出等价，含边界 0.50005→0.5001）。**下一步：提交推送 main 触发 workflow 重跑，看是否有后续新错误**。
+**✅ 当前状态（2026-08-08 已全绿）**：1~7 关全过。最新 run **31204433530（commit 88faeab）conclusion=success**：`BUILD SUCCEEDED` → `ChaijieApp-unsigned.ipa`（5.3MB）→ artifact `ChaijieApp-unsigned-ipa`（ID 9004358954）上传成功。**ipa 已拉回本机 `E:/kuikly_apps/ChaijieApp-iOS/dist/ChaijieApp-unsigned.ipa`**，下一步 Sideloadly 签名安装真机验证。
+
+> ⚠️ 本机查 Actions 的坑：hosts 把 `api.github.com` 钉到 `20.205.243.166`（错误 IP，返回 301 改写/404），正确 IP 是 DNS 的 `20.205.243.168`。所有 GitHub API 调用需加 `--resolve api.github.com:443:20.205.243.168`（不要改 hosts）。
 
 ---
 
 ## 六、当前卡住的问题（新任务首要任务）
 
-**✅ 已解决（2026-08-08）**：Build app 步骤 exit 65 的根因已确认 = `shared:compileKotlinIosArm64` 在 `PlacePage.kt:1133` 报 `Unresolved reference 'format'`（commonMain 里唯一的 `String.format` 调用，Kotlin/Native 不支持 JVM-only API）。已按第五节第 6 行修复，**待推送 main 重跑 workflow 验证**。
+**✅ 已全部解决（2026-08-08）**：iOS 打包链路已打通，最新 workflow run **31204433530 全绿**（`BUILD SUCCEEDED` + ipa 产出 + artifact 上传）。剩余工作只有**真机验证**（Sideloadly 签名安装 `dist/ChaijieApp-unsigned.ipa`）和可选的付费证书签名。
 
 > 历史症状（保留备查）：日志可见 OpenKuiklyIOSRender 编译成功（Libtool → libOpenKuiklyIOSRender.a），随后执行 `[CP-User] Build shared`（gradle 编 Kotlin/Native framework），然后失败。日志尾部只有 note/warning，真正的 error 行已拿到（见上）。
 
