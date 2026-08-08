@@ -91,6 +91,34 @@ internal class UploadPage : ComposeContainer() {
             syncToNativeMethod("scanPoll", JSONObject().apply { put("taskId", taskId) }, null)
         fun copyOriginal(photoId: Long): String =
             syncToNativeMethod("copyOriginal", JSONObject().apply { put("id", photoId) }, null)
+        fun importToUploadQueue(photoIds: List<Long>): String {
+            val arr = JSONArray()
+            photoIds.forEach { arr.put(it) }
+            return syncToNativeMethod("importToUploadQueue", JSONObject().apply { put("photoIds", arr) }, null) ?: ""
+        }
+        fun flushUploadQueue(cb: CallbackFn?) {
+            asyncToNativeMethod("flushUploadQueue", JSONObject(), cb)
+        }
+        /** 记录用户取消上传的照片 id（下次扫描不再提示） */
+        fun markSkippedUploads(photoIds: List<Long>): String {
+            val arr = JSONArray()
+            photoIds.forEach { arr.put(it) }
+            return try {
+                syncToNativeMethod("markSkippedUploads", JSONObject().apply { put("photoIds", arr) }, null) ?: ""
+            } catch (e: Throwable) { "" }
+        }
+        /** 读取已跳过上传的照片 id */
+        fun getSkippedUploads(): List<Long> {
+            return try {
+                val res = syncToNativeMethod("getSkippedUploads", JSONObject(), null) ?: return emptyList()
+                val arr = JSONArray(res)
+                (0 until arr.length()).mapNotNull { arr.optLong(it).takeIf { id -> id > 0 } }
+            } catch (e: Throwable) { emptyList() }
+        }
+        /** 清空所有跳过记录（修复旧版误标记） */
+        fun clearSkippedUploads() {
+            try { syncToNativeMethod("clearSkippedUploads", JSONObject(), null) } catch (e: Throwable) {}
+        }
         fun batchUpload(photos: List<JSONObject>, groups: List<JSONObject>?, cb: CallbackFn?) {
             val arr = JSONArray()
             photos.forEach { arr.put(it) }
@@ -234,7 +262,7 @@ internal class UploadPage : ComposeContainer() {
                     Text("合并交互", fontSize = 11.sp, color = C_SUB, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.clip(RoundedCornerShape(99.dp)).background(Color(0x14B07D6B)).padding(horizontal = 8.dp, vertical = 2.dp))
                 }
-                Text("扫描 ${photos.size} 张 · 后端识别返回 ${scanTotal} 张 · ${groups.size} 个分组 · 未上传", fontSize = 11.5.sp,
+                Text("共 ${totalFacePhotos()} 张照片 · ${groups.size} 个分组 · 未上传", fontSize = 11.5.sp,
                     color = C_SUB, modifier = Modifier.padding(top = 4.dp))
             }
             // ===== 模式切换 tab（对齐原型）=====
@@ -264,8 +292,7 @@ internal class UploadPage : ComposeContainer() {
                     when {
                         mergeMode -> "已选 ${mergePick.size} 组 · 点底部「合并所选」"
                         mergeTab == MergeTab.PICK -> "长按分组进入合并选择 · 点击卡片预览"
-                        mergeTab == MergeTab.DRAG -> "长按分组拖到目标分组上松手合并（即将支持）"
-                        else -> "系统将标记疑似同一人的分组（即将支持）"
+                        else -> "✨ 点击橙色标签，一键合并疑似同一人的分组"
                     },
                     fontSize = 11.5.sp, color = if (mergeMode) Color(0xFFA05A38) else C_CLAY, modifier = Modifier.weight(1f),
                 )
@@ -356,6 +383,30 @@ internal class UploadPage : ComposeContainer() {
                                 if (matchedName.isNotEmpty()) "已匹配已有分组" else "已识别为同一人",
                                 fontSize = 11.sp, color = C_SUB, modifier = Modifier.padding(top = 3.dp),
                             )
+                            // 相似度推荐标签（后端 scan 返回 sim_to/sim_score）：疑似同一人的分组
+                            val simTo = g.optInt("sim_to", -1)
+                            val simName = g.optString("sim_to_name", "")
+                            val simScore = g.optDouble("sim_score", 0.0)
+                            if (simTo >= 0 && simName.isNotEmpty()) {
+                                Row(modifier = Modifier.padding(top = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("\u2728 与\u300C$simName\u300D相似 ${(simScore * 100).toInt()}%",
+                                        fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = C_WHITE,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(99.dp))
+                                            .background(Brush.linearGradient(0f to Color(0xFFE8A37E), 1f to Color(0xFFD97A52)))
+                                            .clickable {
+                                                // 一键推荐合并：把本组 + 推荐目标组加入合并选择并弹确认
+                                                if (!mergeMode) {
+                                                    mergeMode = true
+                                                    mergePick.clear()
+                                                    mergePick.add(gid)
+                                                    mergePick.add(simTo)
+                                                    mergeDialog = true
+                                                }
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 3.dp))
+                                }
+                            }
                         }
                         Box(
                             modifier = Modifier.size(24.dp).clip(CircleShape)
@@ -374,7 +425,21 @@ internal class UploadPage : ComposeContainer() {
                 }
                 if (otherIndices.isNotEmpty()) {
                     item {
-                        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 5.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xFFEDE9E1)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 5.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xFFEDE9E1))
+                                .clickable {
+                                    // 点击"其他"→ 预览所有其他照片（含已跳过的，可手动勾选上传）
+                                    val jo = JSONObject()
+                                    jo.put("id", -100) // 虚拟组 id
+                                    jo.put("matched_person_name", "")
+                                    jo.put("photo_count", otherIndices.size)
+                                    val ja = JSONArray()
+                                    otherIndices.forEach { ja.put(it) }
+                                    jo.put("photo_indices", ja)
+                                    previewGroup = jo
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
                             Box(modifier = Modifier.size(50.dp).clip(RoundedCornerShape(13.dp)).background(Brush.linearGradient(0f to Color(0xFFB9B2A6), 1f to Color(0xFF9C9488))), contentAlignment = Alignment.Center) { Text("\uD83D\uDDC1", fontSize = 22.sp) }
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
@@ -517,28 +582,46 @@ internal class UploadPage : ComposeContainer() {
                                     val idx = indices[pi]
                                     val t = photos.getOrNull(idx)?.optString("thumb", "") ?: ""
                                     val isOff = deselectedIndices.contains(idx)
+                                    // "其他"预览里：已跳过的照片（用户之前取消上传的）显示灰色标记
+                                    val pid = photos.getOrNull(idx)?.optLong("id", -1L) ?: -1L
+                                    val isSkipped = gid == -100 && skippedPhotoIds.contains(pid)
                                     Box(modifier = Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(10.dp))
-                                        .background(if (isOff) Color(0xFFB8B0A6) else Color(0xFFE4DED5))
+                                        .background(if (isOff || isSkipped) Color(0xFFB8B0A6) else Color(0xFFE4DED5))
                                         .border(1.dp, Color(0x80FFFFFF), RoundedCornerShape(10.dp))
                                         .clickable { zoomPhotoIdx = idx }) {
                                         if (t.isNotEmpty()) {
                                             Image(painter = rememberAsyncImagePainter("file://$t"), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                         }
-                                        if (isOff) {
+                                        if (isOff || isSkipped) {
                                             Box(modifier = Modifier.fillMaxSize().background(Color(0x59000000)))
                                         }
                                         Text("${pi + 1}", fontSize = 9.sp, color = C_WHITE, modifier = Modifier.align(Alignment.TopStart).padding(3.dp).clip(RoundedCornerShape(6.dp)).background(Color(0x66000000)).padding(horizontal = 4.dp, vertical = 1.dp))
+                                        if (isSkipped) {
+                                            Text("已跳过", fontSize = 8.sp, color = C_WHITE, modifier = Modifier.align(Alignment.TopEnd).padding(3.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xAA8C7A6A)).padding(horizontal = 4.dp, vertical = 1.dp))
+                                        }
                                         // 右下角选择圈：点它切换选中/取消（照片其他区域点击放大）
                                         Box(
                                             modifier = Modifier.align(Alignment.BottomEnd).padding(3.dp).size(20.dp)
                                                 .clip(CircleShape)
-                                                .background(if (isOff) Brush.linearGradient(listOf(Color(0xFFE3DDD3), Color(0xFFE3DDD3))) else Brush.linearGradient(0f to G1, 1f to G2))
+                                                .background(
+                                                    when {
+                                                        isOff -> Brush.linearGradient(listOf(Color(0xFFE3DDD3), Color(0xFFE3DDD3)))
+                                                        gid == -100 && otherPicked.contains(idx) -> Brush.linearGradient(0f to G1, 1f to G2)
+                                                        gid == -100 -> Brush.linearGradient(listOf(Color(0xFFD8D1C7), Color(0xFFD8D1C7)))
+                                                        else -> Brush.linearGradient(0f to G1, 1f to G2)
+                                                    }
+                                                )
                                                 .border(1.dp, if (isOff) Color(0xFFD8D1C7) else Color.Transparent, CircleShape)
                                                 .clickable {
-                                                    if (deselectedIndices.contains(idx)) deselectedIndices.remove(idx) else deselectedIndices.add(idx)
+                                                    if (gid == -100) {
+                                                        // 其他类：勾选/取消 → 加入/移出 otherPicked（上传时合并）
+                                                        if (otherPicked.contains(idx)) otherPicked.remove(idx) else otherPicked.add(idx)
+                                                    } else {
+                                                        if (deselectedIndices.contains(idx)) deselectedIndices.remove(idx) else deselectedIndices.add(idx)
+                                                    }
                                                 },
                                             contentAlignment = Alignment.Center,
-                                        ) { if (!isOff) Text("\u221A", fontSize = 11.sp, color = C_WHITE, fontWeight = FontWeight.Bold) }
+                                        ) { if (!isOff && (gid != -100 || otherPicked.contains(idx))) Text("\u221A", fontSize = 11.sp, color = C_WHITE, fontWeight = FontWeight.Bold) }
                                     }
                                 } else {
                                     Spacer(modifier = Modifier.weight(1f).aspectRatio(1f))
@@ -669,7 +752,8 @@ internal class UploadPage : ComposeContainer() {
         // 更新 groups：删除被合并的组，加入合并组
         val mergeIds = mergePick.toSet()
         val keep = groups.filter { g -> !mergeIds.contains(g.optInt("id", -1) ?: -1) }
-        groups = keep + newGroup
+        // 合并后重新按照片数降序排序（新合并组不再跑到最下面）
+        groups = (keep + newGroup).sortedByDescending { it.optInt("photo_count", 0) }
         mergedCount += mergeIds.size - 1
         // 更新上传选择：合并组加入 selected（若原来选了其中任一），移除被合并组
         val hadSelected = mergeIds.any { selected.contains(it) }
@@ -690,7 +774,7 @@ internal class UploadPage : ComposeContainer() {
     private fun UploadingScreen(scope: CoroutineScope) {
         Column(modifier = Modifier.fillMaxSize().padding(top = pageData.statusBarHeight.dp).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(44.dp))
-            Text("正在上传所选照片", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C_TEXT)
+            Text("正在加入上传队列", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C_TEXT)
             Text("已选 ${selected.size} 组 · ${selectedPhotoCount()} 张", fontSize = 12.5.sp, color = C_SUB, modifier = Modifier.padding(top = 5.dp))
             Spacer(Modifier.height(24.dp))
             Box(modifier = Modifier.fillMaxWidth().height(14.dp).clip(RoundedCornerShape(99.dp)).background(Color(0xFFE3DDD3))) {
@@ -712,14 +796,29 @@ internal class UploadPage : ComposeContainer() {
                 Text("\u2713", fontSize = 46.sp, color = C_WHITE, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(24.dp))
-            Text("上传完成", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = C_TEXT)
+            Text("已加入上传队列", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = C_TEXT)
             Text(
-                if (uploadedReal >= 0) "已成功上传 $uploadedReal 张照片${if (skippedReal > 0) "，跳过 $skippedReal 张已上传过的" else ""}"
-                else "已成功上传 ${selectedPhotoCount()} 张照片",
+                if (uploadedReal >= 0) "共 ${selectedPhotoCount()} 张照片已保存到本地，正在后台慢慢上传${if (skippedReal > 0) "，$skippedReal 张失败稍后自动重试" else ""}"
+                else "共 ${selectedPhotoCount()} 张照片已保存到本地，正在后台慢慢上传",
                 fontSize = 13.sp, color = C_SUB, lineHeight = 20.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 10.dp),
             )
             if (uploadResult.isNotEmpty() && uploadedReal != selectedPhotoCount()) {
                 Text(uploadResult, fontSize = 11.5.sp, color = C_SUB, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+            }
+            // 本次被取消上传的照片 → 已放入"其他"类，下次不再提示
+            if (justSkippedCount > 0) {
+                Spacer(Modifier.height(14.dp))
+                Row(
+                    modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0x1F968D83)).padding(horizontal = 14.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("\uD83D\uDCC1", fontSize = 13.sp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "未上传的 $justSkippedCount 张照片已放入「其他」类，下次扫描不再提示。需要上传时可在「其他」中手动选择。",
+                        fontSize = 11.5.sp, color = Color(0xFF6B6359), lineHeight = 17.sp, modifier = Modifier.weight(1f),
+                    )
+                }
             }
             Spacer(Modifier.height(30.dp))
             Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(999.dp)).background(Brush.linearGradient(0f to G1, 1f to G2)).clickable { resetAll() }.padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
@@ -737,17 +836,21 @@ internal class UploadPage : ComposeContainer() {
     private var taskId by mutableStateOf("")
     private var groups by mutableStateOf<List<JSONObject>>(emptyList())
     private var otherIndices by mutableStateOf<List<Int>>(emptyList())
-    /** 后端识别接口返回的实际处理照片数（排查"扫描 300 但分组不足 300"的差值用） */
-    private var scanTotal by mutableStateOf(0)
     private val selected = mutableStateListOf<Int>()
     private var uploadPct by mutableStateOf(0f)
     private var uploadResult by mutableStateOf("")
     private var uploadedReal by mutableStateOf(-1)  // 服务器实际入库数（-1 表示未知）
     private var skippedReal by mutableStateOf(0)   // 服务器跳过的已上传数
     private var errMsg by mutableStateOf("")
+    // 用户之前取消上传（跳过）的照片 id：下次扫描自动过滤，不再提示选择上传
+    private var skippedPhotoIds by mutableStateOf<Set<Long>>(emptySet())
+    // 本次完成上传后被标记为跳过的照片 id（DoneScreen 显示"已放入其他"）
+    private var justSkippedCount by mutableStateOf(0)
     private var previewGroup by mutableStateOf<JSONObject?>(null)
     private var zoomPhotoIdx by mutableStateOf(-1) // 放大查看的照片索引（-1 关闭）
     private val deselectedIndices = mutableStateListOf<Int>() // 预览弹框内被单独取消选择的照片索引
+    // "其他"类里用户手动勾选要上传的照片索引（默认空；勾选后加入上传）
+    private val otherPicked = mutableStateListOf<Int>()
     // 合并交互：长按分组进入合并选择模式，点击多选，底部合并
     private var mergeMode by mutableStateOf(false)
     private val mergePick = mutableStateListOf<Int>()
@@ -755,9 +858,8 @@ internal class UploadPage : ComposeContainer() {
     private var mergedCount by mutableStateOf(0)      // 已合并的碎片分组数（合并统计条）
     private var mergeTab by mutableStateOf(MergeTab.PICK) // 当前模式 tab（对齐原型三模式）
 
-    // ===== 合并模式 tab（对齐原型：拖拽合并 / 长按多选 / 相似度推荐）=====
+    // ===== 合并模式 tab（长按多选 / 相似度推荐）=====
     private enum class MergeTab(val label: String, val tip: String) {
-        DRAG("🖐️ 拖拽合并", "按住分组卡片，拖到目标分组上松手即可合并。合并前会弹出确认。"),
         PICK("☝️ 长按多选", "长按第一个分组进入选择，再点其他分组（可多点）。选好后点底部「合并所选」。"),
         SMART("✨ 相似度推荐", "系统自动比对相似度，高相似分组会显示推荐标签，点标签一键合并。"),
     }
@@ -783,6 +885,9 @@ internal class UploadPage : ComposeContainer() {
         errMsg = ""; step = 1; scanPct = 0f; scanStage = "正在扫描相册照片…"
         scope.launch {
             try {
+                // 一次性修复：旧版误把"未上传的其他类照片"标记为跳过（导致照片"消失"）。
+                // 升级后首次扫描清空全部跳过标记，只保留后续用户主动取消的（新逻辑）。
+                bridge.value.clearSkippedUploads()
                 val res = bridge.value.scanGallery(300)
                 val jo = JSONObject(res)
                 if (!jo.optBoolean("success", false)) {
@@ -810,11 +915,33 @@ internal class UploadPage : ComposeContainer() {
                     val st = JSONObject(body)
                     val status = st.optString("status", "")
                     if (status == "done") {
-                        scanTotal = st.optInt("total", 0)
                         val ga = st.optJSONArray("groups") ?: JSONArray()
-                        groups = (0 until ga.length()).mapNotNull { ga.optJSONObject(it) }
+                        var newGroups = (0 until ga.length()).mapNotNull { ga.optJSONObject(it) }
                         val otherArr = st.optJSONArray("other")
-                        otherIndices = if (otherArr != null) (0 until (otherArr.length())).mapNotNull { otherArr.optInt(it) } else emptyList()
+                        var newOther = if (otherArr != null) (0 until (otherArr.length())).mapNotNull { otherArr.optInt(it) } else emptyList()
+                        // 读取本地"已跳过上传"记录，过滤掉不再提示的照片
+                        skippedPhotoIds = bridge.value.getSkippedUploads().toSet()
+                        if (skippedPhotoIds.isNotEmpty()) {
+                            // 组内照片：全部跳过 → 整组移除；部分跳过 → 保留（只去掉跳过的照片索引）
+                            newGroups = newGroups.mapNotNull { g ->
+                                val arr = g.optJSONArray("photo_indices")
+                                val idxs = if (arr != null) (0 until arr.length()).mapNotNull { arr.optInt(it) } else emptyList()
+                                val photoIds = idxs.mapNotNull { i -> photos.getOrNull(i)?.optLong("id", -1L) }
+                                val kept = idxs.filterIndexed { k, _ -> !skippedPhotoIds.contains(photoIds.getOrNull(k) ?: -1L) }
+                                if (kept.isEmpty()) null // 整组都是跳过的 → 不提示
+                                else {
+                                    val j = JSONObject()
+                                    j.put("id", g.optInt("id", -1)); j.put("photo_count", kept.size)
+                                    j.put("sample_index", kept.first())
+                                    j.put("matched_person_name", g.optString("matched_person_name", ""))
+                                    val ja = JSONArray(); kept.forEach { ja.put(it) }; j.put("photo_indices", ja)
+                                    j
+                                }
+                            }
+                            // 其他类：保留所有照片（含跳过的），跳过的在"其他"预览里带标记可手动找回
+                        }
+                        groups = newGroups
+                        otherIndices = newOther
                         scanPct = 1f
                         selected.clear()
                         groups.forEach { selected.add(it.optInt("id", -1) ?: -1) }
@@ -837,9 +964,12 @@ internal class UploadPage : ComposeContainer() {
                         val arr = g.optJSONArray("photo_indices")
                         if (arr != null) (0 until arr.length()).mapNotNull { arr.optInt(it) } else emptyList()
                     } ?: emptyList()
-                }.distinct().filter { !deselectedIndices.contains(it) }
-                if (chosenIds.isEmpty()) { errMsg = "请选择要上传的人脸分组"; step = 2; return@launch }
-                val photosToUpload = chosenIds.mapNotNull { i -> photos.getOrNull(i) }
+                }.toMutableSet()
+                // 合并"其他"类里用户手动勾选的照片
+                chosenIds.addAll(otherPicked)
+                val chosenFinal = chosenIds.distinct().filter { !deselectedIndices.contains(it) }
+                if (chosenFinal.isEmpty()) { errMsg = "请选择要上传的人脸分组"; step = 2; return@launch }
+                val photosToUpload = chosenFinal.mapNotNull { i -> photos.getOrNull(i) }
 
                 // v2：按分组传参 —— 每组记录组名 + 该组照片在本批上传列表中的 0-based 下标，
                 // 后端据此把同组照片的人脸归入同一聚类（老版本不传 groups 后端行为不变）
@@ -850,7 +980,7 @@ internal class UploadPage : ComposeContainer() {
                     val indices = mutableListOf<Int>()
                     for (k in 0 until arr.length()) {
                         val pi = arr.optInt(k)
-                        val pos = chosenIds.indexOf(pi)
+                        val pos = chosenFinal.indexOf(pi)
                         if (pos >= 0) indices.add(pos)
                     }
                     if (indices.isEmpty()) return@forEach
@@ -860,22 +990,49 @@ internal class UploadPage : ComposeContainer() {
                     groupParams.add(JSONObject().apply { put("name", name); put("indices", idxArr) })
                 }
 
+                // v4：优化 —— 先导入本地缓存（秒收），再后台慢慢上传。
+                // 1) 把选中照片的原图立即拷贝到上传队列缓存（用户感觉"上传完成"）
+                val photoIds = photosToUpload.mapNotNull { it.optLong("id", -1L).takeIf { id -> id > 0 } }
+                val importRes = bridge.value.importToUploadQueue(photoIds)
+                val importJo = try { JSONObject(importRes) } catch (_: Throwable) { JSONObject() }
+                val imported = importJo.optInt("imported", 0)
+
+                // 2) 后台慢慢传（flushUploadQueue 内部分批 5 张、失败保留重试）
                 val done = CompletableDeferred<String>()
-                bridge.value.batchUpload(photosToUpload, groupParams.takeIf { it.isNotEmpty() }) { res -> done.complete(res?.toString() ?: "") }
+                bridge.value.flushUploadQueue { res -> done.complete(res?.toString() ?: "") }
                 val body = done.await()
-                val jo = JSONObject(body)
+                val jo = try { JSONObject(body) } catch (_: Throwable) { JSONObject() }
                 uploadedReal = jo.optInt("uploaded", 0)
-                skippedReal = jo.optInt("skipped", 0)
+                skippedReal = jo.optInt("failed", 0)
                 uploadResult = if (jo.optBoolean("success", false)) {
                     val uploaded = jo.optInt("uploaded", 0)
                     val failed = jo.optInt("failed", 0)
-                    val skipped = jo.optInt("skipped", 0)
                     buildString {
-                        append("成功 $uploaded 张")
-                        if (skipped > 0) append("，跳过 $skipped 张已上传过的")
-                        if (failed > 0) append("，失败 $failed 张")
+                        append("已加入上传队列 $imported 张")
+                        if (uploaded > 0) append("，后台完成 $uploaded 张")
+                        if (failed > 0) append("，失败 $failed 张（稍后自动重试）")
                     }
                 } else "上传失败：${jo.optString("error", "未知")}"
+
+                // v5：本次**未选的人脸分组**照片标记为"跳过"——下次扫描不再提示该组，
+                // 除非用户去"其他"里手动找回。注意：不标记"其他"类照片（用户未明确选择，
+                // 不应自动跳过导致照片"消失"）；也不标记未选中的组（保留，用户可再选）。
+                try {
+                    val uploadedIdx = chosenFinal.toSet()
+                    val skippedIdx = mutableListOf<Int>()
+                    // 只标记：被用户明确取消勾选的照片（deselectedIndices）→ 下次不再提示
+                    deselectedIndices.forEach { idx -> if (!uploadedIdx.contains(idx)) skippedIdx.add(idx) }
+                    val skippedPhotoIdsLocal = skippedIdx.distinct()
+                        .mapNotNull { i -> photos.getOrNull(i)?.optLong("id", -1L) }
+                        .filter { it > 0 }
+                    if (skippedPhotoIdsLocal.isNotEmpty()) {
+                        bridge.value.markSkippedUploads(skippedPhotoIdsLocal)
+                        justSkippedCount = skippedPhotoIdsLocal.size
+                        skippedPhotoIds = skippedPhotoIds + skippedPhotoIdsLocal
+                    }
+                } catch (e: Throwable) {
+                    println("markSkippedUploads error: ${e.message}")
+                }
                 step = 4
             } catch (e: Throwable) { uploadResult = "上传出错：${e.message ?: "未知"}"; step = 4 }
         }
@@ -887,5 +1044,6 @@ internal class UploadPage : ComposeContainer() {
         uploadedReal = -1; skippedReal = 0
         mergeMode = false; mergePick.clear(); mergeDialog = false; mergedCount = 0; mergeTab = MergeTab.PICK
         deselectedIndices.clear()
+        otherPicked.clear(); justSkippedCount = 0
     }
 }

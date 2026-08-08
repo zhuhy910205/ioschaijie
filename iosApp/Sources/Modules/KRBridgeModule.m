@@ -438,4 +438,218 @@ static NSString *const KR_UPLOAD_BASE = @"https://www.zhuyanyou.fun/api/upload";
     return nil;
 }
 
+
+#pragma mark - Remote Image Cache (original/thumb download)
+
+// ===== 同步：下载云端原图到本地 cache/remote_originals/{photoId}.jpg，返回 JSON {path, cached} =====
+- (NSString *)cacheRemoteOriginal:(NSDictionary *)args {
+    NSDictionary *params = [self parseParams:args];
+    NSString *url = params[@"url"] ?: @"";
+    NSString *photoId = params[@"photoId"] ?: @"p";
+    if (url.length == 0) return @"";
+    NSString *ext = @".jpg";
+    if ([url containsString:@".png"]) ext = @".png";
+    else if ([url containsString:@".webp"]) ext = @".webp";
+    NSString *dir = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) firstObject];
+    NSString *folder = [dir stringByAppendingPathComponent:@"remote_originals"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:folder withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *outPath = [folder stringByAppendingPathComponent:[photoId stringByAppendingString:ext]];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:outPath]) {
+        return [NSString stringWithFormat:@"{\"path\":\"file://%@\",\"cached\":true}", outPath];
+    }
+    NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:url] options:0 error:nil];
+    if (data.length > 0) {
+        [data writeToFile:outPath atomically:YES];
+        return [NSString stringWithFormat:@"{\"path\":\"file://%@\",\"cached\":false}", outPath];
+    }
+    return @"";
+}
+
+// ===== 异步：下载原图（子线程 + 主线程回调），加载动画期间不阻塞 UI =====
+- (void)asyncCacheRemoteOriginal:(NSDictionary *)args {
+    NSDictionary *params = [self parseParams:args];
+    NSString *url = params[@"url"] ?: @"";
+    NSString *photoId = params[@"photoId"] ?: @"p";
+    KuiklyRenderCallback callback = args[KR_CALLBACK_KEY];
+    if (url.length == 0) {
+        if (callback) callback(@{@"path": @"", @"cached": @NO});
+        return;
+    }
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSString *ext = @".jpg";
+        if ([url containsString:@".png"]) ext = @".png";
+        else if ([url containsString:@".webp"]) ext = @".webp";
+        NSString *dir = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) firstObject];
+        NSString *folder = [dir stringByAppendingPathComponent:@"remote_originals"];
+        [[NSFileManager defaultManager] createDirectoryAtPath:folder withIntermediateDirectories:YES attributes:nil error:nil];
+        NSString *outPath = [folder stringByAppendingPathComponent:[photoId stringByAppendingString:ext]];
+        NSString *path = @"";
+        BOOL cached = NO;
+        if ([[NSFileManager defaultManager] fileExistsAtPath:outPath]) {
+            path = [NSString stringWithFormat:@"file://%@", outPath];
+            cached = YES;
+        } else {
+            NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:url] options:0 error:nil];
+            if (data.length > 0) {
+                [data writeToFile:outPath atomically:YES];
+                path = [NSString stringWithFormat:@"file://%@", outPath];
+            }
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (callback) callback(@{@"path": path, @"cached": @(cached)});
+        });
+    });
+}
+
+// ===== 同步：下载缩略图到本地 cache/remote_thumbs/{photoId}.jpg，返回 file:// 路径 =====
+- (NSString *)cacheRemoteThumb:(NSDictionary *)args {
+    NSDictionary *params = [self parseParams:args];
+    NSString *url = params[@"url"] ?: @"";
+    NSString *photoId = params[@"photoId"] ?: @"p";
+    if (url.length == 0) return @"";
+    NSString *ext = @".jpg";
+    if ([url containsString:@".png"]) ext = @".png";
+    else if ([url containsString:@".webp"]) ext = @".webp";
+    NSString *dir = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) firstObject];
+    NSString *folder = [dir stringByAppendingPathComponent:@"remote_thumbs"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:folder withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *outPath = [folder stringByAppendingPathComponent:[photoId stringByAppendingString:ext]];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:outPath]) {
+        return [NSString stringWithFormat:@"file://%@", outPath];
+    }
+    NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:url] options:0 error:nil];
+    if (data.length > 0) {
+        [data writeToFile:outPath atomically:YES];
+        return [NSString stringWithFormat:@"file://%@", outPath];
+    }
+    return @"";
+}
+
+#pragma mark - Upload Queue (import / flush / skipped)
+
+// ===== 上传队列：把相册原图拷贝到 cache/pending_upload/{id}.jpg（秒收），返回 {imported, skipped} =====
+- (NSString *)importToUploadQueue:(NSDictionary *)args {
+    NSDictionary *params = [self parseParams:args];
+    NSArray *photoIds = params[@"photoIds"];
+    NSSet *already = [self uploadedPhotoIds];
+    NSString *dir = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) firstObject];
+    NSString *qDir = [dir stringByAppendingPathComponent:@"pending_upload"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:qDir withIntermediateDirectories:YES attributes:nil error:nil];
+    int imported = 0, skipped = 0;
+    for (id raw in photoIds) {
+        long long pid = [raw longLongValue];
+        if (pid <= 0) { skipped++; continue; }
+        if ([already containsObject:@(pid)]) { skipped++; continue; }
+        NSString *outPath = [qDir stringByAppendingPathComponent:[NSString stringWithFormat:@"%lld.jpg", pid]];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:outPath]) { imported++; continue; }
+        PHAsset *asset = [self assetForPhotoId:pid];
+        if (!asset) { skipped++; continue; }
+        NSString *path = [self exportImageForAsset:asset photoId:pid folder:@"pending_upload" maxPixel:0 quality:0.95];
+        if (path.length > 0) imported++; else skipped++;
+    }
+    return [NSString stringWithFormat:@"{\"success\":true,\"imported\":%d,\"skipped\":%d}", imported, skipped];
+}
+
+// ===== 后台慢慢上传队列：逐个传 pending_upload/ 里文件，成功后删除 =====
+- (void)flushUploadQueue:(NSDictionary *)args {
+    KuiklyRenderCallback callback = args[KR_CALLBACK_KEY];
+    NSString *dir = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) firstObject];
+    NSString *qDir = [dir stringByAppendingPathComponent:@"pending_upload"];
+    NSArray *files = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:qDir error:nil];
+    NSMutableArray *paths = [NSMutableArray new];
+    for (NSString *f in files) {
+        if ([f hasSuffix:@".jpg"]) [paths addObject:[qDir stringByAppendingPathComponent:f]];
+    }
+    if (paths.count == 0) {
+        if (callback) callback(@{@"success": @YES, @"uploaded": @0, @"failed": @0, @"total": @0});
+        return;
+    }
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        [self multipartUploadToURL:[NSURL URLWithString:[KR_UPLOAD_BASE stringByAppendingString:@"/batch"]]
+                         fileField:@"photos"
+                        filePaths:paths
+                       extraFields:nil
+                        completion:^(NSString *body, NSError *err) {
+            int uploaded = 0, failed = 0;
+            if (err == nil && body.length > 0) {
+                NSData *d = [body dataUsingEncoding:NSUTF8StringEncoding];
+                id jo = [NSJSONSerialization JSONObjectWithData:d options:0 error:nil];
+                if ([jo isKindOfClass:[NSDictionary class]]) {
+                    uploaded = [jo[@"uploaded"] intValue];
+                    for (NSString *p in paths) [[NSFileManager defaultManager] removeItemAtPath:p error:nil];
+                }
+            }
+            failed = (int)paths.count - uploaded;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (callback) callback(@{@"success": @YES, @"uploaded": @(uploaded), @"failed": @(failed), @"total": @(paths.count)});
+            });
+        }];
+    });
+}
+
+// ===== 跳过记录：用户取消上传的照片（下次扫描不再提示）=====
+static NSString *const KR_KEY_SKIPPED_IDS = @"skipped_upload_photo_ids";
+
+- (NSSet<NSNumber *> *)skippedUploadIds {
+    NSArray *arr = [[NSUserDefaults standardUserDefaults] arrayForKey:KR_KEY_SKIPPED_IDS];
+    NSMutableSet *set = [NSMutableSet new];
+    for (id v in arr) { if ([v isKindOfClass:[NSNumber class]]) [set addObject:v]; }
+    return set;
+}
+
+- (NSString *)markSkippedUploads:(NSDictionary *)args {
+    NSDictionary *params = [self parseParams:args];
+    NSArray *ids = params[@"photoIds"];
+    NSMutableSet *cur = [[self skippedUploadIds] mutableCopy];
+    for (id raw in ids) {
+        long long pid = [raw longLongValue];
+        if (pid > 0) [cur addObject:@(pid)];
+    }
+    [cur minusSet:[self uploadedPhotoIds]];
+    [[NSUserDefaults standardUserDefaults] setObject:[cur allObjects] forKey:KR_KEY_SKIPPED_IDS];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    return [NSString stringWithFormat:@"{\"success\":true,\"marked\":%lu}", (unsigned long)ids.count];
+}
+
+- (NSString *)getSkippedUploads:(NSDictionary *)args {
+    NSArray *sorted = [[[self skippedUploadIds] allObjects] sortedArrayUsingSelector:@selector(compare:)];
+    NSData *d = [NSJSONSerialization dataWithJSONObject:sorted options:0 error:nil];
+    return [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding];
+}
+
+- (NSString *)clearSkippedUploads:(NSDictionary *)args {
+    [[NSUserDefaults standardUserDefaults] removeObjectForKey:KR_KEY_SKIPPED_IDS];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    return @"{\"success\":true}";
+}
+
+#pragma mark - Toast
+
+- (void)toast:(NSDictionary *)args {
+    NSDictionary *params = [self parseParams:args];
+    NSString *msg = params[@"message"] ?: @"";
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIViewController *vc = [self viewController];
+        if (!vc) return;
+        UILabel *label = [[UILabel alloc] initWithFrame:CGRectZero];
+        label.text = msg;
+        label.textColor = UIColor.whiteColor;
+        label.backgroundColor = [UIColor colorWithWhite:0 alpha:0.75];
+        label.font = [UIFont systemFontOfSize:14];
+        label.textAlignment = NSTextAlignmentCenter;
+        label.layer.cornerRadius = 8;
+        label.clipsToBounds = YES;
+        label.numberOfLines = 0;
+        [label sizeToFit];
+        CGRect f = label.frame;
+        f.size.width += 32; f.size.height += 18;
+        label.frame = f;
+        label.center = CGPointMake(CGRectGetMidX(vc.view.bounds), CGRectGetMidY(vc.view.bounds));
+        [vc.view addSubview:label];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [label removeFromSuperview];
+        });
+    });
+}
+
 @end

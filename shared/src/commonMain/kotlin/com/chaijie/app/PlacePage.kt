@@ -194,7 +194,8 @@ internal class PlacePage : ComposeContainer() {
             Photo(
                 filename = fn,
                 shootingTime = p.optString("shooting_time", ""),
-                thumb = thumbUrl(p.optString("thumbnail_path"), ApiConfig.chaijieImageUrl(fn)),
+                thumb = cdNThumbUrl(p.optString("cloud_optimized_url", ""), p.optString("cloud_original_url", ""), p.optString("thumbnail_path", ""))
+                    .ifEmpty { ApiConfig.chaijieImageUrl(fn) },
                 lat = p.optDouble("latitude", 0.0).takeIf { p.optBoolean("has_gps", false) },
                 lng = p.optDouble("longitude", 0.0).takeIf { p.optBoolean("has_gps", false) },
                 hasGps = p.optBoolean("has_gps", false),
@@ -1130,15 +1131,7 @@ internal class PlacePage : ComposeContainer() {
     internal fun fmtGps(lat: Double, lng: Double): String {
         val ns = if (lat >= 0) "N" else "S"
         val ew = if (lng >= 0) "E" else "W"
-        return "${fmtFixed4(kotlin.math.abs(lat))}°$ns, ${fmtFixed4(kotlin.math.abs(lng))}°$ew"
-    }
-
-    /** 纯 Kotlin 跨平台：等价于 JVM 的 String.format("%.4f")，四舍五入并固定保留 4 位小数（不足补零）。 */
-    private fun fmtFixed4(v: Double): String {
-        val scaled = kotlin.math.round(v * 10000.0) // Long
-        val whole = scaled / 10000
-        val frac = scaled % 10000
-        return "$whole.${frac.toString().padStart(4, '0')}"
+        return String.format("%.4f°%s, %.4f°%s", kotlin.math.abs(lat), ns, kotlin.math.abs(lng), ew)
     }
 
     @Composable

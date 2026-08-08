@@ -140,7 +140,7 @@ internal class YearFlowPage : ComposeContainer() {
         /** 顶部 OtdCard 行高度（dp）—— 照片越大这个值越大（同时需同步调小 RING_SECTION_HEIGHT） */
         private val OTD_ROW_HEIGHT = 220.dp
         /** 圆盘卡片高度（dp）—— 越大圆盘越大（但会被底部导航压缩） */
-        private val RING_SECTION_HEIGHT = 580.dp
+        private val RING_SECTION_HEIGHT = 440.dp
         /** 年份 chip 文字大小（sp） */
         private val CHIP_FONT = 14.sp
         /** 年份 chip 垂直间距（dp） */
@@ -352,7 +352,7 @@ internal class YearFlowPage : ComposeContainer() {
         }
 
         Box(modifier = Modifier.fillMaxSize().background(C_BG)) {
-            Column(modifier = Modifier.fillMaxSize().padding(top = pageData.statusBarHeight.dp, bottom = 34.dp)) {
+            Column(modifier = Modifier.fillMaxSize().padding(top = pageData.statusBarHeight.dp)) {
                 // 顶部整块 Header（返回/流年标题/日历）已按用户要求删除，照片区直接顶到状态栏下方
                 // 顶部第一行：OtdCard（左侧 3/4 宽，高度 220dp 放大）+ 年份 chips（右侧 1/4 窄条竖排）
                 Row(
@@ -364,8 +364,6 @@ internal class YearFlowPage : ComposeContainer() {
                     Box(modifier = Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) { Chips() }
                 }
                 RingSection()
-                // 把 BottomNavBar 推到底部（避开 home indicator 已由上方 bottom=34.dp 处理）
-                Spacer(modifier = Modifier.weight(1f))
                 BottomNavBar()
             }
             if (fullscreenUrl.value.isNotEmpty()) FullscreenOverlay()
@@ -471,17 +469,17 @@ internal class YearFlowPage : ComposeContainer() {
                 .clip(RoundedCornerShape(14.dp))
                 .background(Color(0xE6FFFFFF))
                 .border(1.dp, Color(0x80FFFFFF), RoundedCornerShape(14.dp))
-                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .padding(horizontal = 12.dp, vertical = 9.dp)
         ) {
             Text(
                 text = p?.title?.ifEmpty { "这张照片还没有介绍" } ?: "加载照片介绍中…",
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 color = C_TEXT,
                 maxLines = 2
             )
             if (p != null) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(text = "📷 ${p.dateStr}", fontSize = 10.5.sp, color = C_SUB)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(text = "📷 ${p.dateStr}", fontSize = 11.sp, color = C_SUB)
             }
         }
     }
@@ -823,7 +821,8 @@ private fun parseYf(j: JSONObject): YfPhoto {
     val name = j.optString("name", j.optString("filename", ""))
     val urlRel = j.optString("url", "")
     val fallback = if (urlRel.startsWith("http")) urlRel else ApiConfig.CHAIJIE_BASE + urlRel
-    val thumb = thumbUrl(j.optString("thumbnail_path"), fallback)
+    val thumb = cdNThumbUrl(j.optString("cloud_optimized_url", ""), j.optString("cloud_original_url", ""), j.optString("thumbnail_path", ""))
+        .ifEmpty { fallback }
     val original = j.optString("cloud_original_url", j.optString("original_url", thumb))
     val title = cleanDesc(j.optString("description", if (name.isNotEmpty()) name else "成长时刻记录"))
     return YfPhoto(

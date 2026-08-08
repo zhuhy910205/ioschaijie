@@ -36,6 +36,7 @@ import com.tencent.kuikly.compose.foundation.shape.CircleShape
 import com.tencent.kuikly.compose.foundation.shape.RoundedCornerShape
 import com.tencent.kuikly.compose.foundation.text.BasicTextField
 import com.tencent.kuikly.compose.material3.Text
+import com.tencent.kuikly.compose.ui.text.font.FontWeight
 import com.tencent.kuikly.compose.ui.graphics.Brush
 import com.tencent.kuikly.compose.ui.graphics.SolidColor
 import com.tencent.kuikly.compose.setContent
@@ -82,6 +83,9 @@ internal class HomePage : ComposeContainer() {
 
     private val toastMsg = mutableStateOf("")
     private val toastSeq = mutableStateOf(0)
+    // 删除确认：pendingDelete 存待确认的 filename；deleteConfirm 标记"已点过一次待二次确认"
+    private val pendingDelete = mutableStateOf("")
+    private val deleteArmed = mutableStateOf(false)
 
     // 人脸头像真实图片 URL 缓存：cluster_id -> 完整图片地址
     private val faceUrlMap = mutableStateOf<Map<String, String>>(emptyMap())
@@ -252,6 +256,40 @@ internal class HomePage : ComposeContainer() {
         fullscreenUrl.value = item.optString(
             "cloud_original_url", item.optString("cloud_optimized_url", "")
         )
+    }
+
+    /** 删除照片（两步确认）：第一次点变红色"再点删除"，3 秒内再点执行删除 */
+    private fun confirmDelete(filename: String) {
+        if (filename.isEmpty()) return
+        if (!deleteArmed.value || pendingDelete.value != filename) {
+            // 第一次点：进入待确认状态
+            pendingDelete.value = filename
+            deleteArmed.value = true
+            toastMsg.value = "再点一次确认删除「$filename」"
+            toastSeq.value++
+            return
+        }
+        // 第二次点：执行删除
+        deleteArmed.value = false
+        pendingDelete.value = ""
+        val body = JSONObject().apply { put("filename", filename) }
+        postJson("${ApiConfig.CHAIJIE_BASE}/api/images/delete", body) { success, _ ->
+            if (success) {
+                // 从列表移除（当前页 + 缓存清掉）
+                photos.value = photos.value.filterNot { it.optString("name", "") == filename }
+                val cache = searchCache.value.toMutableMap()
+                cache.keys.forEach { k ->
+                    val cur = cache[k] ?: return@forEach
+                    cache[k] = cur.filterNot { it.optString("name", "") == filename }
+                }
+                searchCache.value = cache
+                toastMsg.value = "已删除「$filename」"
+                toastSeq.value++
+            } else {
+                toastMsg.value = "删除失败，请重试"
+                toastSeq.value++
+            }
+        }
     }
 
     private fun goPage(name: String) {
@@ -620,24 +658,43 @@ internal class HomePage : ComposeContainer() {
 
     @Composable
     private fun PhotoCard(item: JSONObject) {
-        // 列表缩略图优先（thumbnail_path），点击查看大图时才用优化图/原图
-        val url = thumbUrl(item.optString("thumbnail_path"), item.optString("cloud_optimized_url", ""))
+        // 列表缩略图优先 CDN（cloud_optimized_url，R2 直链 + 长缓存），
+        // 手机上传照片之前走 thumbnail_path（/api/optimized_image no-cache）导致滑动卡，
+        // 统一 CDN 后流畅。点击查看大图时才用优化图/原图。
+        val url = cdNThumbUrl(
+            item.optString("cloud_optimized_url", ""),
+            item.optString("cloud_original_url", ""),
+            item.optString("thumbnail_path", "")
+        )
         val w = item.optInt("width", 0)
         val h = item.optInt("height", 0)
         val ratio = if (w > 0 && h > 0) w.toFloat() / h.toFloat() else 1f
         val title = item.optString("name", "").substringBeforeLast(".")
+        val filename = item.optString("name", "")
         Column(
             modifier = Modifier.clip(RoundedCornerShape(10.dp))
                 .background(C_GLASS)
                 .border(1.dp, C_GLASS_BORDER, RoundedCornerShape(10.dp))
                 .padding(bottom = 8.dp)
         ) {
-            Image(
-                painter = rememberAsyncImagePainter(url),
-                contentDescription = title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxWidth().aspectRatio(ratio).clickable { openFullscreen(item) }
-            )
+            Box(modifier = Modifier.fillMaxWidth().aspectRatio(ratio)) {
+                Image(
+                    painter = rememberAsyncImagePainter(url),
+                    contentDescription = title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().clickable { openFullscreen(item) }
+                )
+                // 右上角小删除标志：两步确认（第一次点变"再点确认"，3秒内再点执行删除）
+                val armed = deleteArmed.value && pendingDelete.value == filename
+                Box(
+                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (armed) Color(0xCCD9534F) else Color(0x99000000))
+                        .clickable { confirmDelete(filename) }
+                        .padding(horizontal = 5.dp, vertical = 3.dp),
+                    contentAlignment = Alignment.Center
+                ) { Text(text = if (armed) "确认?" else "\u2715", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+            }
             if (title.isNotEmpty()) {
                 Text(
                     text = title,
