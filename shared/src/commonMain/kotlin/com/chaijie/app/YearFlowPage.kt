@@ -140,7 +140,7 @@ internal class YearFlowPage : ComposeContainer() {
         /** 顶部 OtdCard 行高度（dp）—— 照片越大这个值越大（同时需同步调小 RING_SECTION_HEIGHT） */
         private val OTD_ROW_HEIGHT = 220.dp
         /** 圆盘卡片高度（dp）—— 越大圆盘越大（但会被底部导航压缩） */
-        private val RING_SECTION_HEIGHT = 440.dp
+        private val RING_SECTION_HEIGHT = 620.dp
         /** 年份 chip 文字大小（sp） */
         private val CHIP_FONT = 14.sp
         /** 年份 chip 垂直间距（dp） */
@@ -352,7 +352,7 @@ internal class YearFlowPage : ComposeContainer() {
         }
 
         Box(modifier = Modifier.fillMaxSize().background(C_BG)) {
-            Column(modifier = Modifier.fillMaxSize().padding(top = pageData.statusBarHeight.dp)) {
+            Column(modifier = Modifier.fillMaxSize().padding(top = pageData.statusBarHeight.dp, bottom = 20.dp)) {
                 // 顶部整块 Header（返回/流年标题/日历）已按用户要求删除，照片区直接顶到状态栏下方
                 // 顶部第一行：OtdCard（左侧 3/4 宽，高度 220dp 放大）+ 年份 chips（右侧 1/4 窄条竖排）
                 Row(
@@ -469,17 +469,17 @@ internal class YearFlowPage : ComposeContainer() {
                 .clip(RoundedCornerShape(14.dp))
                 .background(Color(0xE6FFFFFF))
                 .border(1.dp, Color(0x80FFFFFF), RoundedCornerShape(14.dp))
-                .padding(horizontal = 12.dp, vertical = 9.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             Text(
                 text = p?.title?.ifEmpty { "这张照片还没有介绍" } ?: "加载照片介绍中…",
-                fontSize = 13.sp,
+                fontSize = 13.5.sp,
                 color = C_TEXT,
                 maxLines = 2
             )
             if (p != null) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(text = "📷 ${p.dateStr}", fontSize = 11.sp, color = C_SUB)
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(text = "📷 ${p.dateStr}", fontSize = 11.5.sp, color = C_SUB)
             }
         }
     }
