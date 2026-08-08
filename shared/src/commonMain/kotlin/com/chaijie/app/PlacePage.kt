@@ -1131,7 +1131,9 @@ internal class PlacePage : ComposeContainer() {
     internal fun fmtGps(lat: Double, lng: Double): String {
         val ns = if (lat >= 0) "N" else "S"
         val ew = if (lng >= 0) "E" else "W"
-        return String.format("%.4f°%s, %.4f°%s", kotlin.math.abs(lat), ns, kotlin.math.abs(lng), ew)
+        // KMP 兼容：不用 String.format（Kotlin/Native 不支持），用 round 保留 4 位小数
+        fun r4(v: Double): String = (kotlin.math.round(v * 10000.0) / 10000.0).toString()
+        return "${r4(kotlin.math.abs(lat))}°$ns, ${r4(kotlin.math.abs(lng))}°$ew"
     }
 
     @Composable
