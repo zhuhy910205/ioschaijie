@@ -3,6 +3,7 @@
 #import "KuiklyContextParam.h"
 #import "KuiklyRenderView.h"
 #import <Photos/Photos.h>
+#import <AVKit/AVKit.h>
 #import <SDWebImage/SDWebImageManager.h>
 #import <SDWebImage/SDWebImageDownloader.h>
 #import <SDWebImage/SDImageCache.h>
@@ -376,6 +377,32 @@ static NSString *const KR_UPLOAD_BASE = @"https://www.zhuyanyou.fun/api/upload";
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (callback) callback(result);
             });
+        }];
+    });
+}
+
+#pragma mark - Video
+
+- (void)playVideo:(NSDictionary *)args {
+    NSDictionary *params = [self parseParams:args];
+    NSArray *urlsArr = params[@"urls"];
+    NSMutableArray<NSString *> *urls = [NSMutableArray new];
+    for (id u in urlsArr) {
+        if ([u isKindOfClass:[NSString class]] && [(NSString *)u length] > 0) [urls addObject:u];
+    }
+    if (urls.count == 0) return;
+    NSInteger index = [params[@"index"] integerValue];
+    if (index < 0 || index >= (NSInteger)urls.count) index = 0;
+    NSString *urlStr = urls[index];
+    UIViewController *vc = [self viewController];
+    if (!vc) return;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        AVPlayerViewController *playerVC = [[AVPlayerViewController alloc] init];
+        playerVC.modalPresentationStyle = UIModalPresentationFullFullScreen;
+        AVPlayer *player = [AVPlayer playerWithURL:[NSURL URLWithString:urlStr]];
+        playerVC.player = player;
+        [vc presentViewController:playerVC animated:YES completion:^{
+            [player play];
         }];
     });
 }

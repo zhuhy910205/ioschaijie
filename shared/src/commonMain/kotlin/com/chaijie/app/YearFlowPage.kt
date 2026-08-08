@@ -352,7 +352,7 @@ internal class YearFlowPage : ComposeContainer() {
         }
 
         Box(modifier = Modifier.fillMaxSize().background(C_BG)) {
-            Column(modifier = Modifier.fillMaxSize().padding(top = pageData.statusBarHeight.dp)) {
+            Column(modifier = Modifier.fillMaxSize().padding(top = pageData.statusBarHeight.dp, bottom = 34.dp)) {
                 // 顶部整块 Header（返回/流年标题/日历）已按用户要求删除，照片区直接顶到状态栏下方
                 // 顶部第一行：OtdCard（左侧 3/4 宽，高度 220dp 放大）+ 年份 chips（右侧 1/4 窄条竖排）
                 Row(
@@ -364,6 +364,8 @@ internal class YearFlowPage : ComposeContainer() {
                     Box(modifier = Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) { Chips() }
                 }
                 RingSection()
+                // 把 BottomNavBar 推到底部（避开 home indicator 已由上方 bottom=34.dp 处理）
+                Spacer(modifier = Modifier.weight(1f))
                 BottomNavBar()
             }
             if (fullscreenUrl.value.isNotEmpty()) FullscreenOverlay()
