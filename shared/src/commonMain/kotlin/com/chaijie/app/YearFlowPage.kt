@@ -140,7 +140,7 @@ internal class YearFlowPage : ComposeContainer() {
         /** 顶部 OtdCard 行高度（dp）—— 照片越大这个值越大（同时需同步调小 RING_SECTION_HEIGHT） */
         private val OTD_ROW_HEIGHT = 220.dp
         /** 圆盘卡片高度（dp）—— 越大圆盘越大（但会被底部导航压缩） */
-        private val RING_SECTION_HEIGHT = 440.dp
+        private val RING_SECTION_HEIGHT = 580.dp
         /** 年份 chip 文字大小（sp） */
         private val CHIP_FONT = 14.sp
         /** 年份 chip 垂直间距（dp） */
@@ -471,17 +471,17 @@ internal class YearFlowPage : ComposeContainer() {
                 .clip(RoundedCornerShape(14.dp))
                 .background(Color(0xE6FFFFFF))
                 .border(1.dp, Color(0x80FFFFFF), RoundedCornerShape(14.dp))
-                .padding(horizontal = 12.dp, vertical = 9.dp)
+                .padding(horizontal = 12.dp, vertical = 6.dp)
         ) {
             Text(
                 text = p?.title?.ifEmpty { "这张照片还没有介绍" } ?: "加载照片介绍中…",
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 color = C_TEXT,
                 maxLines = 2
             )
             if (p != null) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(text = "📷 ${p.dateStr}", fontSize = 11.sp, color = C_SUB)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(text = "📷 ${p.dateStr}", fontSize = 10.5.sp, color = C_SUB)
             }
         }
     }
