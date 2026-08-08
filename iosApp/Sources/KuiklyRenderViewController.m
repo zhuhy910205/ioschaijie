@@ -98,7 +98,10 @@
         }
     }
     if (sb == 0) sb = UIApplication.sharedApplication.statusBarFrame.size.height;
-    if (sb <= 0) sb = 20; // 兜底（非刘海屏常规状态栏高度）
+    // 兜底值：contextPageData 在 viewDidLoad 阶段调用，window/scene 可能未连接导致读不到真值。
+    // 老款 iPhone 状态栏 20pt，刘海屏 44~47pt，Dynamic Island 47~59pt。用 47 保证刘海屏不遮，
+    // 老款会顶部多留一点空白（无害）。再低（如 20）刘海屏会被遮，再高（如 60）老款留白过大。
+    if (sb <= 0) sb = 47;
     pageData[@"statusBarHeight"] = @(sb);
     return pageData;
 }
