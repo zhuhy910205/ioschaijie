@@ -28,4 +28,5 @@ targets:
     dependencies:
       - sdk: Photos.framework
       - sdk: AVKit.framework
+      - sdk: AVFoundation.framework
     postBuildScripts: []
