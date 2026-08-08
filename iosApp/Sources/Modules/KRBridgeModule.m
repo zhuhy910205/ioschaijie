@@ -398,7 +398,7 @@ static NSString *const KR_UPLOAD_BASE = @"https://www.zhuyanyou.fun/api/upload";
     if (!vc) return;
     dispatch_async(dispatch_get_main_queue(), ^{
         AVPlayerViewController *playerVC = [[AVPlayerViewController alloc] init];
-        playerVC.modalPresentationStyle = UIModalPresentationFullFullScreen;
+        playerVC.modalPresentationStyle = UIModalPresentationFullScreen;
         AVPlayer *player = [AVPlayer playerWithURL:[NSURL URLWithString:urlStr]];
         playerVC.player = player;
         [vc presentViewController:playerVC animated:YES completion:^{
