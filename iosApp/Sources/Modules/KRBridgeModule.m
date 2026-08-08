@@ -197,14 +197,19 @@ static NSString *const KR_UPLOAD_BASE = @"https://www.zhuyanyou.fun/api/upload";
 
 // ===== 同步 GET =====
 - (NSString *)httpGetSync:(NSString *)urlString {
+    __block NSString *result = nil;
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlString]];
     req.timeoutInterval = 15;
     [req setValue:@"Mozilla/5.0 (ChaijieApp)" forHTTPHeaderField:@"User-Agent"];
-    NSURLResponse *resp = nil;
-    NSError *err = nil;
-    NSData *data = [NSURLSession.sharedSession sendSynchronousRequest:req returningResponse:&resp error:&err];
-    if (err || data.length == 0) return nil;
-    return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    [[[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
+        if (err == nil && data.length > 0) {
+            result = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+        }
+        dispatch_semaphore_signal(sem);
+    }] resume];
+    dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC));
+    return result;
 }
 
 // ===== 相册权限 =====
