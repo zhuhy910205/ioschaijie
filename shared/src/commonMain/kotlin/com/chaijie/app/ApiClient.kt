@@ -65,6 +65,13 @@ class CacheBridgeModule : Module() {
             syncToNativeMethod("copyOriginal", JSONObject().apply { put("id", photoId) }, null) ?: ""
         } catch (e: Throwable) { "" }
     }
+    /** 检查本地是否已有原图缓存（夜间预缓存 remote_originals / 本机相册 originals），返回 file:// 或空 */
+    fun checkLocalOriginal(photoId: Long): String {
+        if (photoId <= 0) return ""
+        return try {
+            syncToNativeMethod("checkLocalOriginal", JSONObject().apply { put("id", photoId) }, null) ?: ""
+        } catch (e: Throwable) { "" }
+    }
     /** 立即把相册原图拷入上传队列缓存（秒收），返回 JSON {imported, skipped} */
     fun importToUploadQueue(photoIds: List<Long>): String {
         val arr = JSONArray()

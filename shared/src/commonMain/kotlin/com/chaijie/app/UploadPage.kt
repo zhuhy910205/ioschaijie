@@ -881,13 +881,17 @@ internal class UploadPage : ComposeContainer() {
     }
 
     // ===== 逻辑 =====
+    private var clearedOldSkips = false // 升级后仅首次扫描清一次旧错误标记
     private fun startScan(scope: CoroutineScope) {
         errMsg = ""; step = 1; scanPct = 0f; scanStage = "正在扫描相册照片…"
         scope.launch {
             try {
-                // 一次性修复：旧版误把"未上传的其他类照片"标记为跳过（导致照片"消失"）。
-                // 升级后首次扫描清空全部跳过标记，只保留后续用户主动取消的（新逻辑）。
-                bridge.value.clearSkippedUploads()
+                // 一次性修复（仅进程内首次）：旧版误把"未上传的其他类照片"标记为跳过，
+                // 导致照片从提示中"消失"。升级后首次扫描清空，之后保留用户主动取消的记录。
+                if (!clearedOldSkips) {
+                    bridge.value.clearSkippedUploads()
+                    clearedOldSkips = true
+                }
                 val res = bridge.value.scanGallery(300)
                 val jo = JSONObject(res)
                 if (!jo.optBoolean("success", false)) {
@@ -1014,13 +1018,24 @@ internal class UploadPage : ComposeContainer() {
                     }
                 } else "上传失败：${jo.optString("error", "未知")}"
 
-                // v5：本次**未选的人脸分组**照片标记为"跳过"——下次扫描不再提示该组，
-                // 除非用户去"其他"里手动找回。注意：不标记"其他"类照片（用户未明确选择，
-                // 不应自动跳过导致照片"消失"）；也不标记未选中的组（保留，用户可再选）。
+                // v5：被"手动取消选择"的照片标记为跳过 → 下次扫描不再提示（移入"其他"）。
+                // 扫描后所有人脸分组默认选中，用户取消的组 = 不在 selected 的分组 → 标记跳过；
+                // 预览里单张取消（deselectedIndices）也标记。注意：不标记"其他"类照片
+                // （用户未主动取消，不应自动跳过导致照片"消失"）。
                 try {
                     val uploadedIdx = chosenFinal.toSet()
                     val skippedIdx = mutableListOf<Int>()
-                    // 只标记：被用户明确取消勾选的照片（deselectedIndices）→ 下次不再提示
+                    // 1) 未选的人脸分组（用户手动取消的组）→ 全部照片标记跳过
+                    groups.forEach { g ->
+                        val gid = g.optInt("id", -1) ?: -1
+                        if (selected.contains(gid)) return@forEach
+                        val arr = g.optJSONArray("photo_indices")
+                        if (arr != null) (0 until arr.length()).forEach { k ->
+                            val idx = arr.optInt(k)
+                            if (!uploadedIdx.contains(idx)) skippedIdx.add(idx)
+                        }
+                    }
+                    // 2) 预览里单张取消的（已含在未选组里则跳过重复）
                     deselectedIndices.forEach { idx -> if (!uploadedIdx.contains(idx)) skippedIdx.add(idx) }
                     val skippedPhotoIdsLocal = skippedIdx.distinct()
                         .mapNotNull { i -> photos.getOrNull(i)?.optLong("id", -1L) }

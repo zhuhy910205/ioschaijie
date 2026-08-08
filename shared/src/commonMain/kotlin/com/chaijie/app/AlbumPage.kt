@@ -105,7 +105,7 @@ internal class AlbumPage : ComposeContainer() {
         acquireModule<RouterModule>(RouterModule.MODULE_NAME).closePage()
     }
 
-    /** 取缩略图：优先本地缓存（file://），否则 CDN URL（并触发后台下载缓存） */
+    /** 取缩略图：直接返回 URL（rememberAsyncImagePainter 异步加载，不阻塞 UI 线程） */
     private fun thumbFor(item: JSONObject): String {
         val pid = item.optString("name", "p")
         thumbCache[pid]?.let { return it }
@@ -115,17 +115,13 @@ internal class AlbumPage : ComposeContainer() {
             item.optString("thumbnail_path", "")
         )
         if (remote.isNotEmpty() && remote.startsWith("http")) {
-            // 后台下载到本地缓存（有缓存直接返回），下次直接走 file://
-            val res = bridge.value.cacheRemoteThumb(remote, pid)
-            if (res.startsWith("file://")) {
-                thumbCache[pid] = res
-                return res
-            }
+            // 记录到内存缓存（URL 本身，Image 组件异步加载）
+            thumbCache[pid] = remote
         }
         return remote
     }
 
-    /** 点击照片：放大查看原图（异步加载，优先本地相册原图秒开，无则下载缓存） */
+    /** 点击照片：放大查看原图（异步加载，优先本地缓存/相册原图秒开，无则下载缓存） */
     private fun openZoom(item: JSONObject, scope: kotlinx.coroutines.CoroutineScope) {
         val pid = item.optString("name", "p")
         val photoId = item.optLong("photo_id", -1L)
@@ -134,8 +130,14 @@ internal class AlbumPage : ComposeContainer() {
             .ifEmpty { thumbUrl(item.optString("thumbnail_path"), "") }
         zoomLoading = true
         zoomPath = null
-        // 先尝试本地相册原图（手机上传的照片秒开；同步但毫秒级，且 native 内部读取 MediaStore）
-        // 用后台线程执行，避免任何主线程阻塞
+        // 先检查本地已有缓存（夜间预缓存/本机相册直读）→ 秒开不转圈
+        val cached = bridge.value.checkLocalOriginal(photoId)
+        if (cached.startsWith("file://")) {
+            zoomPath = cached
+            zoomLoading = false
+            return
+        }
+        // 后台线程：本机相册直读（有映射才读，避免误命中）
         scope.launch {
             val local = withContext(Dispatchers.Default) {
                 if (photoId > 0) bridge.value.copyOriginal(photoId) else ""

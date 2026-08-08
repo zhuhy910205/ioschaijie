@@ -321,6 +321,27 @@ static NSString *const KR_UPLOAD_BASE = @"https://www.zhuyanyou.fun/api/upload";
     return [self exportImageForAsset:asset photoId:pid folder:@"originals" maxPixel:0 quality:0.95];
 }
 
+// ===== 检查本地是否已有原图缓存（夜间预缓存 remote_originals / 本机相册 originals）=====
+- (NSString *)checkLocalOriginal:(NSDictionary *)args {
+    NSDictionary *params = [self parseParams:args];
+    long long pid = [params[@"id"] longLongValue];
+    if (pid <= 0) return @"";
+    NSString *dir = [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) firstObject];
+    // 1) 云端夜间预缓存
+    NSString *remoteDir = [dir stringByAppendingPathComponent:@"remote_originals"];
+    NSString *remoteFile = [remoteDir stringByAppendingPathComponent:[NSString stringWithFormat:@"%lld.jpg", pid]];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:remoteFile]) {
+        return [NSString stringWithFormat:@"file://%@", remoteFile];
+    }
+    // 2) 本机相册直读缓存（copyOriginal 拷贝）
+    NSString *localDir = [dir stringByAppendingPathComponent:@"originals"];
+    NSString *localFile = [localDir stringByAppendingPathComponent:[NSString stringWithFormat:@"%lld.jpg", pid]];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:localFile]) {
+        return [NSString stringWithFormat:@"file://%@", localFile];
+    }
+    return @"";
+}
+
 // ===== 异步：批量上传原图入库（photos: [{id, filename}]，可选 groups）=====
 - (void)batchUpload:(NSDictionary *)args {
     NSDictionary *params = [self parseParams:args];
