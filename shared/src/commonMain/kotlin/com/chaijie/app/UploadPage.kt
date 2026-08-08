@@ -119,6 +119,12 @@ internal class UploadPage : ComposeContainer() {
         fun clearSkippedUploads() {
             try { syncToNativeMethod("clearSkippedUploads", JSONObject(), null) } catch (e: Throwable) {}
         }
+        /** 修改聚类名称（真实同步到后台，含聚类中心重算） */
+        fun renameCluster(personId: String, name: String): String {
+            return try {
+                syncToNativeMethod("renameCluster", JSONObject().apply { put("person_id", personId); put("name", name) }, null) ?: ""
+            } catch (e: Throwable) { "" }
+        }
         fun batchUpload(photos: List<JSONObject>, groups: List<JSONObject>?, cb: CallbackFn?) {
             val arr = JSONArray()
             photos.forEach { arr.put(it) }
@@ -262,7 +268,7 @@ internal class UploadPage : ComposeContainer() {
                     Text("合并交互", fontSize = 11.sp, color = C_SUB, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.clip(RoundedCornerShape(99.dp)).background(Color(0x14B07D6B)).padding(horizontal = 8.dp, vertical = 2.dp))
                 }
-                Text("共 ${totalFacePhotos()} 张照片 · ${groups.size} 个分组 · 未上传", fontSize = 11.5.sp,
+                Text("扫描 ${photos.size} 张 · 后端识别返回 ${scanTotal} 张 · ${groups.size} 个分组 · 未上传", fontSize = 11.5.sp,
                     color = C_SUB, modifier = Modifier.padding(top = 4.dp))
             }
             // ===== 模式切换 tab（对齐原型）=====
@@ -408,6 +414,17 @@ internal class UploadPage : ComposeContainer() {
                                 }
                             }
                         }
+                        // 改名按钮：非合并模式下，已匹配的分组可改聚类名称（真实同步到后台）
+                        if (!mergeMode) {
+                            Column(modifier = Modifier.width(46.dp).clip(RoundedCornerShape(10.dp))
+                                .background(Color(0x1A7A6A5A))
+                                .clickable { startRenameGroup(g) }
+                                .padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("\u270E", fontSize = 13.sp, color = Color(0xFF6B5D4E))
+                                Text("改名", fontSize = 9.5.sp, color = Color(0xFF6B5D4E), modifier = Modifier.padding(top = 1.dp))
+                            }
+                            Spacer(Modifier.width(8.dp))
+                        }
                         Box(
                             modifier = Modifier.size(24.dp).clip(CircleShape)
                                 .background(if (isPicked) Brush.linearGradient(0f to G1, 1f to G2) else Brush.linearGradient(listOf(Color.Transparent, Color.Transparent)))
@@ -484,6 +501,10 @@ internal class UploadPage : ComposeContainer() {
         // 预览弹框（点击分组卡片触发）
         previewGroup?.let { g ->
             PreviewDialog(g = g) { previewGroup = null }
+        }
+        // 聚类重命名弹框（点击分组卡片「改名」触发）
+        renameGroup?.let { g ->
+            RenameDialog(g = g) { renameGroup = null; renameMsg = "" }
         }
         // 照片放大查看
         if (zoomPhotoIdx >= 0) {
@@ -714,6 +735,93 @@ internal class UploadPage : ComposeContainer() {
         }
     }
 
+    // ===== 聚类重命名对话框 =====
+    @Composable
+    private fun RenameDialog(g: JSONObject, onClose: () -> Unit) {
+        val scope = rememberCoroutineScope()
+        val gid = g.optInt("id", -1) ?: -1
+        val oldName = g.optString("matched_person_name", "").ifEmpty { "人脸组 ${gid + 1}" }
+        val personId = g.optString("matched_person_id", "")
+        val count = g.optInt("photo_count", 0)
+        Dialog(
+            onDismissRequest = { if (!renameBusy) onClose() },
+            properties = DialogProperties(usePlatformDefaultWidth = false, scrimColor = Color(0x99000000)),
+        ) {
+            Column(modifier = Modifier.fillMaxSize().background(C_BG).padding(top = 30.dp)) {
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("重命名聚类", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C_TEXT, modifier = Modifier.weight(1f))
+                    Box(modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(Color(0x1AB07D6B)).clickable { if (!renameBusy) onClose() }.padding(horizontal = 12.dp, vertical = 6.dp)) { Text("取消", fontSize = 12.sp, color = C_CLAY, fontWeight = FontWeight.SemiBold) }
+                }
+                Text(
+                    "修改后会真实同步到后台：更新聚类名称、重算聚类中心，后续新照片将按新名称识别归类。\n当前：$oldName · $count 张",
+                    fontSize = 12.sp, color = C_SUB, lineHeight = 18.sp, modifier = Modifier.padding(horizontal = 16.dp),
+                )
+                Spacer(Modifier.height(10.dp))
+                TextField(
+                    value = renameInput,
+                    onValueChange = { renameInput = it },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    singleLine = true,
+                )
+                if (renameMsg.isNotEmpty()) {
+                    Text(renameMsg, fontSize = 11.5.sp, color = if (renameMsg.startsWith("✅")) Color(0xFF3E7A52) else Color(0xFFB0492E),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(999.dp)).background(Color(0xFFE3DDD3)).clickable { if (!renameBusy) onClose() }.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                        Text("取消", fontSize = 13.sp, color = C_SUB, fontWeight = FontWeight.SemiBold)
+                    }
+                    Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(999.dp))
+                        .background(if (renameBusy) Brush.linearGradient(listOf(Color(0xFFD8D1C7), Color(0xFFD8D1C7))) else Brush.linearGradient(0f to G1, 1f to G2))
+                        .clickable {
+                            if (renameBusy) return@clickable
+                            val newName = renameInput.trim()
+                            if (newName.isEmpty() || newName == oldName) { renameMsg = "请输入新的名称"; return@clickable }
+                            renameBusy = true
+                            renameMsg = ""
+                            // 提交后台
+                            scope.launch {
+                                val res = bridge.value.renameCluster(personId, newName)
+                                renameBusy = false
+                                val jo = try { JSONObject(res) } catch (_: Throwable) { JSONObject() }
+                                if (jo.optBoolean("success", false)) {
+                                    renameMsg = "✅ 已同步后台：${jo.optString("new_name", newName)}"
+                                    // 更新本地分组显示名
+                                    val updated = JSONObject().apply {
+                                        put("id", gid)
+                                        val arr = g.optJSONArray("photo_indices")
+                                        put("photo_indices", arr)
+                                        put("photo_count", count)
+                                        put("sample_index", g.optInt("sample_index", 0))
+                                        put("matched_person_id", personId)
+                                        put("matched_person_name", newName)
+                                    }
+                                    val mergedId = g.optInt("sim_to", -1)
+                                    if (mergedId >= 0) { updated.put("sim_to", mergedId); updated.put("sim_to_name", g.optString("sim_to_name", "")); updated.put("sim_score", g.optDouble("sim_score", 0.0)) }
+                                    val idx = groups.indexOfFirst { (it.optInt("id", -1) ?: -1) == gid }
+                                    if (idx >= 0) groups = groups.toMutableList().apply { this[idx] = updated }
+                                } else {
+                                    renameMsg = "❌ ${jo.optString("error", "同步失败")}"
+                                }
+                            }
+                        }
+                        .padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                        Text(if (renameBusy) "同步中…" else "确认修改", fontSize = 13.sp, color = C_WHITE, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+    }
+
+    /** 打开聚类重命名对话框 */
+    private fun startRenameGroup(g: JSONObject) {
+        renameInput = g.optString("matched_person_name", "").ifEmpty { "人脸组 ${(g.optInt("id", -1) ?: 0) + 1}" }
+        renameMsg = ""
+        renameBusy = false
+        renameGroup = g
+    }
+
     // ===== 合并逻辑 =====
     private fun doMerge(newName: String) {
         if (mergePick.size < 2) return
@@ -836,6 +944,8 @@ internal class UploadPage : ComposeContainer() {
     private var taskId by mutableStateOf("")
     private var groups by mutableStateOf<List<JSONObject>>(emptyList())
     private var otherIndices by mutableStateOf<List<Int>>(emptyList())
+    /** 后端识别接口返回的实际处理照片数（排查"扫描 300 但分组不足 300"的差值用） */
+    private var scanTotal by mutableStateOf(0)
     private val selected = mutableStateListOf<Int>()
     private var uploadPct by mutableStateOf(0f)
     private var uploadResult by mutableStateOf("")
@@ -846,6 +956,11 @@ internal class UploadPage : ComposeContainer() {
     private var skippedPhotoIds by mutableStateOf<Set<Long>>(emptySet())
     // 本次完成上传后被标记为跳过的照片 id（DoneScreen 显示"已放入其他"）
     private var justSkippedCount by mutableStateOf(0)
+    // 聚类重命名对话框状态
+    private var renameGroup by mutableStateOf<JSONObject?>(null)
+    private var renameInput by mutableStateOf("")
+    private var renameBusy by mutableStateOf(false)
+    private var renameMsg by mutableStateOf("")
     private var previewGroup by mutableStateOf<JSONObject?>(null)
     private var zoomPhotoIdx by mutableStateOf(-1) // 放大查看的照片索引（-1 关闭）
     private val deselectedIndices = mutableStateListOf<Int>() // 预览弹框内被单独取消选择的照片索引
@@ -919,6 +1034,7 @@ internal class UploadPage : ComposeContainer() {
                     val st = JSONObject(body)
                     val status = st.optString("status", "")
                     if (status == "done") {
+                        scanTotal = st.optInt("total", 0)
                         val ga = st.optJSONArray("groups") ?: JSONArray()
                         var newGroups = (0 until ga.length()).mapNotNull { ga.optJSONObject(it) }
                         val otherArr = st.optJSONArray("other")

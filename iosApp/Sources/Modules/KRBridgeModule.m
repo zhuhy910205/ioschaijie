@@ -213,6 +213,55 @@ static NSString *const KR_UPLOAD_BASE = @"https://www.zhuyanyou.fun/api/upload";
     return result;
 }
 
+// ===== 同步 POST（JSON body）=====
+- (NSString *)httpPostJson:(NSString *)urlString body:(NSString *)jsonBody {
+    __block NSString *result = nil;
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlString]];
+    req.HTTPMethod = @"POST";
+    req.timeoutInterval = 30;
+    [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    [req setValue:@"Mozilla/5.0 (ChaijieApp)" forHTTPHeaderField:@"User-Agent"];
+    [req setHTTPBody:[jsonBody dataUsingEncoding:NSUTF8StringEncoding]];
+    [[[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
+        if (err == nil && data.length > 0) {
+            result = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+        }
+        dispatch_semaphore_signal(sem);
+    }] resume];
+    dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 40 * NSEC_PER_SEC));
+    return result;
+}
+
+// ===== 同步：通用时间戳 / 日期格式化 =====
+- (NSString *)currentTimestamp:(NSDictionary *)args {
+    return [NSString stringWithFormat:@"%.0f", [NSDate date].timeIntervalSince1970 * 1000.0];
+}
+
+- (NSString *)dateFormatter:(NSDictionary *)args {
+    NSDictionary *params = [self parseParams:args];
+    long long ts = [params[@"timeStamp"] longLongValue];
+    NSString *fmt = params[@"format"] ?: @"yyyy-MM-dd HH:mm:ss";
+    NSDate *date = [NSDate dateWithTimeIntervalSince1970:(NSTimeInterval)ts / 1000.0];
+    NSDateFormatter *df = [[NSDateFormatter alloc] init];
+    df.dateFormat = fmt;
+    df.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+    return [df stringFromDate:date] ?: @"";
+}
+
+// ===== 同步：修改聚类名称（真实同步到后台）=====
+- (NSString *)renameCluster:(NSDictionary *)args {
+    NSDictionary *params = [self parseParams:args];
+    NSString *personId = params[@"person_id"] ?: @"";
+    NSString *name = params[@"name"] ?: @"";
+    if (name.length == 0) return @"{\"success\":false,\"error\":\"name 不能为空\"}";
+    NSDictionary *bodyDict = @{@"person_id": personId ?: @"", @"name": name};
+    NSData *jd = [NSJSONSerialization dataWithJSONObject:bodyDict options:0 error:nil];
+    NSString *body = [[NSString alloc] initWithData:jd encoding:NSUTF8StringEncoding];
+    NSString *res = [self httpPostJson:@"https://www.zhuyanyou.fun/admin/persons/api/cluster/rename" body:body];
+    return res ?: @"{\"success\":false,\"error\":\"网络失败\"}";
+}
+
 // ===== 相册权限 =====
 - (BOOL)ensureGalleryPermission {
     if (@available(iOS 14, *)) {
