@@ -24,5 +24,6 @@ targets:
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         CLANG_ENABLE_OBJC_ARC: YES
-    dependencies: []
+    dependencies:
+      - framework: Photos.framework
     postBuildScripts: []
