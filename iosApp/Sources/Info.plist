@@ -32,5 +32,7 @@
         <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>需要访问相册以扫描照片并上传到云端进行人脸分组</string>
 </dict>
 </plist>
