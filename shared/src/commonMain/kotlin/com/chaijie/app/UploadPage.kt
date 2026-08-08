@@ -234,7 +234,7 @@ internal class UploadPage : ComposeContainer() {
                     Text("合并交互", fontSize = 11.sp, color = C_SUB, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.clip(RoundedCornerShape(99.dp)).background(Color(0x14B07D6B)).padding(horizontal = 8.dp, vertical = 2.dp))
                 }
-                Text("共 ${totalFacePhotos()} 张照片 · ${groups.size} 个分组 · 未上传", fontSize = 11.5.sp,
+                Text("扫描 ${photos.size} 张 · 后端识别返回 ${scanTotal} 张 · ${groups.size} 个分组 · 未上传", fontSize = 11.5.sp,
                     color = C_SUB, modifier = Modifier.padding(top = 4.dp))
             }
             // ===== 模式切换 tab（对齐原型）=====
@@ -737,6 +737,8 @@ internal class UploadPage : ComposeContainer() {
     private var taskId by mutableStateOf("")
     private var groups by mutableStateOf<List<JSONObject>>(emptyList())
     private var otherIndices by mutableStateOf<List<Int>>(emptyList())
+    /** 后端识别接口返回的实际处理照片数（排查"扫描 300 但分组不足 300"的差值用） */
+    private var scanTotal by mutableStateOf(0)
     private val selected = mutableStateListOf<Int>()
     private var uploadPct by mutableStateOf(0f)
     private var uploadResult by mutableStateOf("")
@@ -808,6 +810,7 @@ internal class UploadPage : ComposeContainer() {
                     val st = JSONObject(body)
                     val status = st.optString("status", "")
                     if (status == "done") {
+                        scanTotal = st.optInt("total", 0)
                         val ga = st.optJSONArray("groups") ?: JSONArray()
                         groups = (0 until ga.length()).mapNotNull { ga.optJSONObject(it) }
                         val otherArr = st.optJSONArray("other")
